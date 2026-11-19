@@ -234,94 +234,89 @@ INDEXER_ADAPTIVE_SCHEDULING=true
 
 ### Scenario 3: Ledger Gap + Slow Recovery
 - **Gap detected**: 200-ledger gap
-- **Mode**: Catch-Up (3s interval, 500 batch)
-- **Progress**: Each poll advances ~500 ledgers
-- **Recovery**: Gap closes in ~2 polls (~6s + RPC latency)
-- **Backoff**: If RPC fails mid-recovery, backoff applies but mode stays Catch-Up
+- **Catch-Up mode**: 3s interval, 500 batch
+- **RPC slow**: Backoff kicks in (5s → 15s → 45s)
+- **Recovery**: RPC recovers, backoff resets, catch-up continues
+- **Caught up**: Lag ≤ 50, return to Caught-Up mode
 
-## Historical Contract-State Snapshots (Audit Queries)
+## Governed Data-Access Request Workflow for Analysts
 
-### Purpose
-
-Audit queries need to reconstruct the contract's state as of a specific ledger without replaying the entire event history. This section defines bounded, immutable snapshots persisted at documented ledger checkpoints, linked to the source event range they summarize, and validated against direct contract reads.
+Sensitive analytical datasets (e.g., per-account loan history, indexed event streams) require a governed, auditable access workflow. This section defines the contract for that workflow so that grants are purpose-bound, minimal, time-limited, and attributable.
 
 ### Supported States
 
-A snapshot captures the indexer's materialized contract state at a checkpoint ledger. Supported states are exactly those the indexer already persists for the contract (e.g. balances, allowances, and any other indexed aggregates). No new state is derived; snapshots are a point-in-time projection of existing indexed data.
+An access request moves through the following states:
+
+| State | Meaning |
+|-------|---------|
+| `requested` | Analyst submitted a request; awaiting approver decision |
+| `approved` | Approver accepted the request; grant not yet issued |
+| `granted` | Access is active until `expires_at` |
+| `denied` | Approver rejected the request (terminal) |
+| `revoked` | An active grant was withdrawn before expiry (terminal) |
+| `expired` | Grant lapsed past `expires_at` (terminal, set by the sweeper) |
+
+### Transition Rules
+
+Valid transitions (all others are rejected with `409 Conflict` and no side effects):
+
+- `requested → approved` (by designated approver)
+- `requested → denied` (by designated approver)
+- `approved → granted` (by grantor/system)
+- `granted → revoked` (by approver or grantor)
+- `granted → expired` (by system sweeper only)
+
+Stale actions (e.g., approving an already-`granted` request, revoking an `expired` grant) are rejected atomically; the request row is not mutated and no audit record is written for the rejected attempt beyond a `rejected_transition` log line.
 
 ### Input Constraints
 
-- **Checkpoint ledger** must be a documented checkpoint (see below) and must be `<=` the indexer's last fully-processed ledger. Requests for future or unprocessed ledgers are rejected.
-- **Event range** must be ordered: `start_ledger <= end_ledger`, and `end_ledger` must equal the checkpoint ledger.
-- **Staleness**: a snapshot request whose checkpoint is older than the retained snapshot window is rejected as stale rather than silently recomputed.
-- **Bounded size**: the number of events in the source range is capped by `INDEXER_SNAPSHOT_MAX_EVENTS`; ranges exceeding the cap are rejected.
+A request is rejected at creation (`422 Unprocessable Entity`) unless all of the following hold:
+
+- **Stated purpose**: `purpose` is a non-empty string (≤ 500 chars) describing the analytical question.
+- **Minimal dataset**: `dataset_scope` is a non-empty allow-listed set of dataset identifiers; wildcard/`*` scopes are rejected.
+- **Bounded expiry**: `expires_at` is in the future and no more than `MAX_ACCESS_TTL` (default 30 days) from `requested_at`.
+- **Designated approver**: `approver_id` is present and **must differ from** `requester_id` (no self-approval).
 
 ### Authorization & Consent
 
-- Snapshot creation is an operator action requiring the `admin:indexer` scope (same scope as `/admin/indexer/reset-backoff`).
-- Read access to snapshots for audit queries requires the existing analytics read scope; no new PII is exposed.
-- No snapshot is created implicitly; consent is the explicit admin call.
+- Only the designated `approver_id` may transition `requested → approved|denied`.
+- Only a grantor (role `data:grant`) or the system may transition `approved → granted`.
+- The requester can never approve or grant their own request, even if they hold the approver role.
+- Revocation requires the approver, the grantor, or an admin with `data:revoke` scope.
+
+### Audit Log
+
+Every `granted`, `revoked`, and `expired` transition writes an immutable audit record:
+
+```json
+{
+  "event": "data_access_granted",
+  "request_id": "dar_01H...",
+  "actor_id": "user_123",
+  "actor_role": "data:grant",
+  "requester_id": "user_456",
+  "dataset_scope": ["loan_history", "indexed_events"],
+  "purpose": "Q4 delinquency cohort analysis",
+  "expires_at": "2026-11-15T00:00:00Z",
+  "timestamp": "2026-10-16T12:00:00Z",
+  "reason": null
+}
+```
+
+Revocations and expirations include a `reason` (`manual_revoke` or `ttl_expired`). Audit records are append-only and never updated or deleted.
+
+### Automatic Expiry
+
+A scheduled sweeper transitions `granted` requests whose `expires_at` has passed to `expired`, writes the corresponding audit record, and removes the effective permission. The sweeper is idempotent: re-running it on an already-`expired` request is a no-op.
+
+### Persistence & Compatibility
+
+- New table `data_access_requests` (id, requester_id, approver_id, purpose, dataset_scope JSONB, state, requested_at, expires_at, decided_at, revoked_at, reason).
+- New append-only table `data_access_audit_log`.
+- These are additive; no existing indexer tables or API responses change shape. Existing `/indexer/status` consumers are unaffected.
 
 ### Failure Behavior
 
-- Invalid inputs (unordered range, non-checkpoint ledger, future ledger, oversized range) are rejected **before** any persistence, so there are no partial side effects.
-- If validation against a direct contract read fails, the snapshot row is written with `validation_status = 'failed'` and the mismatch details recorded; it is never marked `valid`.
-- Snapshot writes are idempotent per `(contract, checkpoint_ledger)`: re-requesting an existing checkpoint returns the stored snapshot rather than creating a duplicate.
-
-### Persistence
-
-```sql
-CREATE TABLE contract_state_snapshots (
-  id SERIAL PRIMARY KEY,
-  contract VARCHAR(56) NOT NULL,
-  checkpoint_ledger BIGINT NOT NULL,
-
-  -- Source event range this snapshot summarizes
-  start_ledger BIGINT NOT NULL,
-  end_ledger BIGINT NOT NULL,
-
-  -- Immutable serialized state (exact money units preserved)
-  state JSONB NOT NULL,
-
-  -- Validation against direct contract read
-  validation_status VARCHAR(20) NOT NULL DEFAULT 'pending', -- pending|valid|failed
-  validation_details JSONB,
-
-  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-
-  CONSTRAINT uq_snapshot_checkpoint UNIQUE (contract, checkpoint_ledger),
-  CONSTRAINT ck_snapshot_range CHECK (start_ledger <= end_ledger AND end_ledger = checkpoint_ledger)
-);
-```
-
-Snapshots are immutable: rows are insert-only and never updated except to record the one-time validation outcome. Money values are stored in the same exact units used by the event/indexer schema (no floating point).
-
-### Validation
-
-After writing a snapshot, the indexer performs a direct contract read at the checkpoint ledger and compares the reconstructed state. The outcome is recorded in `validation_status`/`validation_details`. A `failed` snapshot remains queryable for audit but is flagged so consumers do not treat it as authoritative.
-
-### Compatibility & Migration
-
-- This is a new table; no existing event/indexer columns change, so existing consumers are unaffected.
-- Migration is additive (`CREATE TABLE` only) and safe to roll back by dropping the table.
-- Snapshot `state` mirrors the existing indexed representation; any future change to that representation must bump a `schema_version` field (reserved) and document the migration.
-
-### Configuration
-
-```env
-# Documented checkpoint interval (ledgers between snapshots)
-INDEXER_SNAPSHOT_CHECKPOINT_INTERVAL=1000
-# Max events allowed in a snapshot's source range
-INDEXER_SNAPSHOT_MAX_EVENTS=10000
-# Retained snapshot window (ledgers); older checkpoints are rejected as stale
-INDEXER_SNAPSHOT_RETENTION_LEDGERS=100000
-```
-
-### Test Coverage
-
-- Successful snapshot creation at a documented checkpoint with a valid event range.
-- Boundary: `start_ledger == end_ledger == checkpoint_ledger`.
-- Rejection: unordered range, non-checkpoint ledger, future ledger, oversized range, stale checkpoint — each with no partial persistence.
-- Idempotency: re-requesting an existing checkpoint returns the stored snapshot.
-- Access control: creation without `admin:indexer` is denied.
-- Dependency failure: direct contract read fails → snapshot recorded as `failed`, not `valid`.
+- Invalid transitions and constraint violations return `4xx` with a machine-readable `code` and leave persisted state unchanged (no partial grants).
+- Grant issuance and audit write occur in a single transaction; if the audit write fails, the grant is rolled back.
+- Dependency failures (DB unavailable) surface as `503` and are safe to retry; the sweeper retries on the next tick.
