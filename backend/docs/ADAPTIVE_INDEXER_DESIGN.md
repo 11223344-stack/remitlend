@@ -233,78 +233,95 @@ INDEXER_ADAPTIVE_SCHEDULING=true
 - **Recovery**: After RPC recovers, scheduler adjusts based on lag
 
 ### Scenario 3: Ledger Gap + Slow Recovery
-- **Gap detected**: 200-ledger gap marked "suspect"
-- **Scheduler**: Detects high lag, enters Catch-Up mode
-- **Backfill**: Backfill process can run alongside adaptive polling (no conflict)
-- **Recovery**: Once caught up AND gap backfilled, lag shrinks, scheduler exits Catch-Up
+- **Gap detected**: 200-ledger gap
+- **Mode**: Catch-Up (3s interval, 500 batch)
+- **Progress**: Each poll advances ~500 ledgers
+- **Recovery**: Gap closes in ~2 polls (~6s + RPC latency)
+- **Backoff**: If RPC fails mid-recovery, backoff applies but mode stays Catch-Up
 
-## Observability Requirements
+## Historical Contract-State Snapshots (Audit Queries)
 
-1. **Operator Dashboard** queries:
-   - Current mode, lag, backoff level
-   - Mode transition history (last 24h)
-   - P95/P99 poll duration by mode
-   - RPC failure rate and backoff effectiveness
+### Purpose
 
-2. **Alerts**:
-   - `indexer_stuck_in_catch_up_15m` - Catch-Up mode for >15 minutes
-   - `indexer_lag_growing` - Lag increasing for 3 consecutive polls
-   - `indexer_backoff_max_triggered` - Backoff capped for 2+ consecutive failures
+Audit queries need to reconstruct the contract's state as of a specific ledger without replaying the entire event history. This section defines bounded, immutable snapshots persisted at documented ledger checkpoints, linked to the source event range they summarize, and validated against direct contract reads.
 
-3. **SLOs**:
-   - Catch-up lag < 50 ledgers: 99.5% of time when RPC healthy
-   - P99 poll duration in Catch-Up mode: < 10s
+### Supported States
 
-## Rollout Strategy
+A snapshot captures the indexer's materialized contract state at a checkpoint ledger. Supported states are exactly those the indexer already persists for the contract (e.g. balances, allowances, and any other indexed aggregates). No new state is derived; snapshots are a point-in-time projection of existing indexed data.
 
-### Phase 1: Development
-- Implement AdaptiveScheduler service
-- Unit tests for mode transitions, backoff logic
-- Integration tests with mocked RPC
-- **Duration**: 2 weeks
+### Input Constraints
 
-### Phase 2: Staging
-- Deploy with `INDEXER_ADAPTIVE_SCHEDULING=false` (disabled)
-- Verify no regressions vs. current fixed-interval behavior
-- Collect baseline metrics
-- **Duration**: 1 week
+- **Checkpoint ledger** must be a documented checkpoint (see below) and must be `<=` the indexer's last fully-processed ledger. Requests for future or unprocessed ledgers are rejected.
+- **Event range** must be ordered: `start_ledger <= end_ledger`, and `end_ledger` must equal the checkpoint ledger.
+- **Staleness**: a snapshot request whose checkpoint is older than the retained snapshot window is rejected as stale rather than silently recomputed.
+- **Bounded size**: the number of events in the source range is capped by `INDEXER_SNAPSHOT_MAX_EVENTS`; ranges exceeding the cap are rejected.
 
-### Phase 3: Gradual Enablement
-1. **Day 1**: Enable for 10% of traffic (dev environment)
-2. **Day 3**: Enable for 50% of traffic (staging)
-3. **Day 5**: Enable for 100% (production)
-4. **Day 7**: Verify 99.9% uptime + no alerting
-5. **Rollback plan**: Set `INDEXER_ADAPTIVE_SCHEDULING=false`, restart
+### Authorization & Consent
 
-### Phase 4: Tuning
-- Analyze 2-week metrics
-- Adjust thresholds based on observed RPC behavior
-- Document final configuration for operators
+- Snapshot creation is an operator action requiring the `admin:indexer` scope (same scope as `/admin/indexer/reset-backoff`).
+- Read access to snapshots for audit queries requires the existing analytics read scope; no new PII is exposed.
+- No snapshot is created implicitly; consent is the explicit admin call.
 
-## Compatibility Matrix
+### Failure Behavior
 
-| Component | Current | Adaptive | Breaking? |
-|-----------|---------|----------|-----------|
-| EventIndexer API | ✓ | ✓ | No |
-| Webhooks | ✓ | ✓ | No |
-| Database schema | ✓ | +1 table | No |
-| Metrics | ✓ | +3 metrics | No |
-| Environment variables | 2 vars | +11 vars | No (all optional) |
-| Deployed contracts | ✓ | ✓ | No |
+- Invalid inputs (unordered range, non-checkpoint ledger, future ledger, oversized range) are rejected **before** any persistence, so there are no partial side effects.
+- If validation against a direct contract read fails, the snapshot row is written with `validation_status = 'failed'` and the mismatch details recorded; it is never marked `valid`.
+- Snapshot writes are idempotent per `(contract, checkpoint_ledger)`: re-requesting an existing checkpoint returns the stored snapshot rather than creating a duplicate.
 
-## Future Enhancements
+### Persistence
 
-1. **Per-contract scheduling**: Run separate adapters for each contract (currently single scheduler)
-2. **Predictive batching**: Use RPC response times to predict optimal batch size
-3. **Network-aware thresholds**: Auto-tune based on detected network conditions
-4. **Catch-up completion callbacks**: Allow other services to react when catch-up ends
+```sql
+CREATE TABLE contract_state_snapshots (
+  id SERIAL PRIMARY KEY,
+  contract VARCHAR(56) NOT NULL,
+  checkpoint_ledger BIGINT NOT NULL,
 
-## Acceptance Criteria
+  -- Source event range this snapshot summarizes
+  start_ledger BIGINT NOT NULL,
+  end_ledger BIGINT NOT NULL,
 
-- [x] Algorithm defined with clear state transitions
-- [x] Failure scenarios analyzed and mitigated
-- [x] Database schema designed and migrations planned
-- [x] Configuration parameters documented
-- [x] Metrics and logging strategy defined
-- [x] Rollout strategy includes rollback plan
-- [x] Backward compatibility verified
+  -- Immutable serialized state (exact money units preserved)
+  state JSONB NOT NULL,
+
+  -- Validation against direct contract read
+  validation_status VARCHAR(20) NOT NULL DEFAULT 'pending', -- pending|valid|failed
+  validation_details JSONB,
+
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+  CONSTRAINT uq_snapshot_checkpoint UNIQUE (contract, checkpoint_ledger),
+  CONSTRAINT ck_snapshot_range CHECK (start_ledger <= end_ledger AND end_ledger = checkpoint_ledger)
+);
+```
+
+Snapshots are immutable: rows are insert-only and never updated except to record the one-time validation outcome. Money values are stored in the same exact units used by the event/indexer schema (no floating point).
+
+### Validation
+
+After writing a snapshot, the indexer performs a direct contract read at the checkpoint ledger and compares the reconstructed state. The outcome is recorded in `validation_status`/`validation_details`. A `failed` snapshot remains queryable for audit but is flagged so consumers do not treat it as authoritative.
+
+### Compatibility & Migration
+
+- This is a new table; no existing event/indexer columns change, so existing consumers are unaffected.
+- Migration is additive (`CREATE TABLE` only) and safe to roll back by dropping the table.
+- Snapshot `state` mirrors the existing indexed representation; any future change to that representation must bump a `schema_version` field (reserved) and document the migration.
+
+### Configuration
+
+```env
+# Documented checkpoint interval (ledgers between snapshots)
+INDEXER_SNAPSHOT_CHECKPOINT_INTERVAL=1000
+# Max events allowed in a snapshot's source range
+INDEXER_SNAPSHOT_MAX_EVENTS=10000
+# Retained snapshot window (ledgers); older checkpoints are rejected as stale
+INDEXER_SNAPSHOT_RETENTION_LEDGERS=100000
+```
+
+### Test Coverage
+
+- Successful snapshot creation at a documented checkpoint with a valid event range.
+- Boundary: `start_ledger == end_ledger == checkpoint_ledger`.
+- Rejection: unordered range, non-checkpoint ledger, future ledger, oversized range, stale checkpoint — each with no partial persistence.
+- Idempotency: re-requesting an existing checkpoint returns the stored snapshot.
+- Access control: creation without `admin:indexer` is denied.
+- Dependency failure: direct contract read fails → snapshot recorded as `failed`, not `valid`.
