@@ -376,5 +376,42 @@
     "notScheduled": "Not scheduled",
     "unknown": "Unknown",
     "executableNow": "Executable now"
+  },
+  "Offers": {
+    "title": "Compare loan and pool offers",
+    "description": "Sort columns with the keyboard or compare the card layout on small screens. Amounts keep their source currency.",
+    "caption": "Loan and pool offer comparison. Column headers sort the table; each row name is a row header.",
+    "summary": "Showing {visible} of {total} offers. Sorted by {column} {direction}. Filters: {filters}.",
+    "sortAction": "Activate to sort by this column",
+    "sortAscending": "ascending",
+    "sortDescending": "descending",
+    "loanName": "Loan {id}",
+    "poolName": "Lending pool",
+    "rate": "{value}%",
+    "termNone": "Flexible",
+    "filters": {
+      "searchLabel": "Search offers",
+      "searchPlaceholder": "Search by name or ID",
+      "currencyLabel": "Currency",
+      "kindLabel": "Offer type",
+      "statusLabel": "Status",
+      "all": "All",
+      "loan": "Loan",
+      "pool": "Pool"
+    },
+    "columns": {
+      "name": "Offer",
+      "kind": "Type",
+      "amount": "Amount available",
+      "ratePercent": "Rate / APY",
+      "termDays": "Term (days)",
+      "status": "Status"
+    },
+    "states": {
+      "loading": "Loading offers…",
+      "error": "Offers could not be loaded. Retry from the lender portal.",
+      "empty": "No offers match the current filters.",
+      "invalid": "That sort or filter action was invalid and was ignored."
+    }
   }
 }

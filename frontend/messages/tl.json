@@ -376,5 +376,42 @@
     "notScheduled": "Hindi naka-iskedyul",
     "unknown": "Hindi alam",
     "executableNow": "Maaaring ipatupad ngayon"
+  },
+  "Offers": {
+    "title": "Paghahambing ng loan at pool offers",
+    "description": "Pag-uri-uriin ang mga column gamit ang keyboard o ihambing ang card layout sa maliliit na screen. Panatilihin ng mga halaga ang kanilang orihinal na currency.",
+    "caption": "Paghahambing ng loan at pool offers. Ang mga column header ay nag-uuri ng talahanayan; bawat pangalan ng row ay isang row header.",
+    "summary": "Ipinapakita ang {visible} sa {total} na offer. Nakaayos ayon sa {column} {direction}. Mga filter: {filters}.",
+    "sortAction": "I-activate upang pag-urisin ayon sa column na ito",
+    "sortAscending": "pataas",
+    "sortDescending": "pababa",
+    "loanName": "Loan {id}",
+    "poolName": "Lending pool",
+    "rate": "{value}%",
+    "termNone": "Flexible",
+    "filters": {
+      "searchLabel": "Maghanap ng offer",
+      "searchPlaceholder": "Maghanap ayon sa pangalan o ID",
+      "currencyLabel": "Currency",
+      "kindLabel": "Uri ng offer",
+      "statusLabel": "Status",
+      "all": "Lahat",
+      "loan": "Loan",
+      "pool": "Pool"
+    },
+    "columns": {
+      "name": "Offer",
+      "kind": "Uri",
+      "amount": "Available na halaga",
+      "ratePercent": "Rate / APY",
+      "termDays": "Termino (araw)",
+      "status": "Status"
+    },
+    "states": {
+      "loading": "Nilo-load ang mga offer…",
+      "error": "Hindi ma-load ang mga offer. Subukan muli mula sa lender portal.",
+      "empty": "Walang offer na tumutugma sa kasalukuyang filter.",
+      "invalid": "Ang sort o filter action ay hindi wasto at hindi pinansin."
+    }
   }
 }
