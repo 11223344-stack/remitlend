@@ -35,6 +35,12 @@ import {
   listLoanStateEventsEndpoint,
   replayLoanStateEndpoint,
 } from '../controllers/loanStateEventController.js';
+import {
+  getNetworkTelemetry,
+  getNetworkFailoverEvents,
+  listDeadLetterWrites,
+  redriveDeadLetterWrite,
+} from '../controllers/networkTelemetryController.js';
 
 import { listDiscrepancies } from '../services/discrepancyLedgerService.js';
 import {
@@ -719,6 +725,138 @@ router.post(
     const result = await executePrivilegedRequest(privilegedId(req.params.id), req.user!.publicKey);
     res.status(result.status === 'executed' ? 200 : 502).json({ success: true, data: result });
   }),
+);
+
+// ── Network submission telemetry + bounded failover (#857) ────────────────
+// Operator-only surfaces for per-network throughput / latency / throttle /
+// error rates, bounded failover state, durable failover + retry-storm events,
+// and dead-letter re-drive. Gated by the admin:indexer API key.
+
+/**
+ * @swagger
+ * /admin/network-telemetry:
+ *   get:
+ *     summary: Per-network transaction submission telemetry + bounded failover status
+ *     description: >
+ *       Throughput, latency (p50/p95/p99), throttle rate, and error rate per
+ *       configured network endpoint, plus the active failover endpoint,
+ *       per-endpoint circuit state, durable write-queue depth, dead-letter
+ *       count, and the current retry-storm alert state.
+ *     tags: [Admin]
+ *     security:
+ *       - ApiKeyAuth: []
+ *     responses:
+ *       200:
+ *         description: Telemetry + failover snapshot
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success: { type: boolean, example: true }
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     telemetry:
+ *                       type: object
+ *                       description: Per-network rates + write-queue + storm-alert state
+ *                     failover:
+ *                       type: object
+ *                       description: Per-endpoint circuit state + active selection
+ */
+router.get('/network-telemetry', requireApiKey('admin:indexer'), getNetworkTelemetry);
+
+/**
+ * @swagger
+ * /admin/network-failover/events:
+ *   get:
+ *     summary: Recent failover + retry-storm audit events
+ *     tags: [Admin]
+ *     security:
+ *       - ApiKeyAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: limit
+ *         required: false
+ *         schema: { type: integer, default: 50, maximum: 200 }
+ *     responses:
+ *       200:
+ *         description: Failover / storm events (newest first)
+ */
+router.get(
+  '/network-failover/events',
+  requireApiKey('admin:indexer'),
+  getNetworkFailoverEvents,
+);
+
+/**
+ * @swagger
+ * /admin/network-failover/dead-letters:
+ *   get:
+ *     summary: List dead-lettered signed writes (metadata only)
+ *     description: >
+ *       Returns bounded retry exhaustion metadata for signed writes that the
+ *       replay processor could not submit. Signed XDR payloads are deliberately
+ *       excluded; re-drive is the only supported mutation.
+ *     tags: [Admin]
+ *     security:
+ *       - ApiKeyAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: limit
+ *         required: false
+ *         schema: { type: integer, default: 50, maximum: 200 }
+ *     responses:
+ *       200:
+ *         description: Dead-lettered writes, newest first
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success: { type: boolean, example: true }
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     deadLetters: { type: array, items: { type: object } }
+ */
+router.get(
+  '/network-failover/dead-letters',
+  requireApiKey('admin:indexer'),
+  listDeadLetterWrites,
+);
+
+/**
+ * @swagger
+ * /admin/network-failover/dead-letters/{id}/redrive:
+ *   post:
+ *     summary: Re-drive a dead-lettered signed write for another bounded retry pass
+ *     description: >
+ *       Only a write currently in the `dead_lettered` state may be re-driven;
+ *       the immutable signed payload is unchanged. Resets attempts and clears
+ *       dead-letter state so the replay processor drains it. The signed XDR
+ *       and transaction hash are never altered, preserving on-chain money
+ *       semantics.
+ *     tags: [Admin]
+ *     security:
+ *       - ApiKeyAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema: { type: integer }
+ *     responses:
+ *       200:
+ *         description: Write re-queued for replay
+ *       404:
+ *         description: Dead-lettered write not found
+ */
+router.post(
+  '/network-failover/dead-letters/:id/redrive',
+  requireApiKey('admin:indexer'),
+  strictRateLimiter,
+  auditLog,
+  redriveDeadLetterWrite,
 );
 
 export default router;
