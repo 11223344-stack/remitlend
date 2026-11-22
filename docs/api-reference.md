@@ -812,6 +812,92 @@ borrower of that loan.
 
 ---
 
+### Statement Verification
+
+#### GET /api/v1/statements/verification-key
+
+Returns the current public verification key for downloadable statement manifests.
+Public endpoint; no authentication required. The private signing key is never
+returned or derivable from this response. See
+[STATEMENT_VERIFICATION.md](./STATEMENT_VERIFICATION.md) for full instructions.
+
+**Response (200 OK):**
+
+```json
+{
+  "success": true,
+  "data": {
+    "schema": "statement-manifest/v1",
+    "algorithm": "Ed25519",
+    "keyId": "statement-signing-default",
+    "publicKeyPem": "-----BEGIN PUBLIC KEY-----\n...\n-----END PUBLIC KEY-----\n",
+    "instructions": "/docs/STATEMENT_VERIFICATION.md"
+  }
+}
+```
+
+**Failure:** `503 SERVICE_UNAVAILABLE` when no valid signing key is configured.
+
+---
+
+#### POST /api/v1/statements/manifests
+
+Issues a signed manifest for an already-generated CSV statement. Requires a
+valid JWT. The backend signs the supplied digest, source type, source
+checkpoint, row count, and generation time; it does not receive or store the CSV
+contents.
+
+**Request:**
+
+```
+Authorization: Bearer <JWT>
+Content-Type: application/json
+
+{
+  "sourceType": "activity",
+  "sourceCheckpoint": "api:3:2026-06-15T11:59:00.000Z",
+  "statementDigest": "<64-char lowercase SHA-256 hex of CSV bytes>",
+  "rowCount": 3,
+  "generatedAt": "2026-06-15T12:00:00.000Z"
+}
+```
+
+`sourceType` is one of `activity`, `wallet_payments`, `loan_events`.
+`sourceCheckpoint` is 1–256 bounded characters. `rowCount` is 0–100000.
+`generatedAt` must be within 5 minutes of server time.
+
+**Response (201 Created):**
+
+```json
+{
+  "success": true,
+  "data": {
+    "schema": "statement-manifest/v1",
+    "manifestId": "<sha256 hex>",
+    "source": { "type": "activity", "checkpoint": "api:3:2026-06-15T11:59:00.000Z" },
+    "statement": {
+      "sha256": "<digest>",
+      "rowCount": 3,
+      "generatedAt": "2026-06-15T12:00:00.000Z"
+    },
+    "subjectHash": "<daily salted hash; no wallet address>",
+    "issuedAt": "2026-06-15T12:00:01.000Z",
+    "verification": {
+      "algorithm": "Ed25519",
+      "keyId": "statement-signing-default",
+      "instructions": "/docs/STATEMENT_VERIFICATION.md"
+    },
+    "signature": "<base64>"
+  }
+}
+```
+
+**Failures:** `400` invalid or stale input, `401` missing JWT, `503` signing key
+or issuance registry unavailable. Repeated identical requests return the same
+manifest without creating duplicate issuance rows.
+
+---
+
 ### Admin Endpoints
 
 #### GET /api/v1/admin/loan-disputes

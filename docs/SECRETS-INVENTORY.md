@@ -23,6 +23,8 @@ An exposed secret can allow an attacker to:
 | `SENTRY_AUTH_TOKEN` | Upload source maps; can deanonymise stack traces. |
 | `DATABASE_URL` | Full read/write access to the PostgreSQL database (PII, loan data). |
 | `REDIS_URL` | Read/write rate-limit counters, JWT revocation list, idempotency keys. |
+| `STATEMENT_SIGNING_PRIVATE_KEY_PEM` | Forge signed statement manifests for any wallet. |
+| `STATEMENT_SUBJECT_PEPPER` | Correlate daily subject hashes in statement manifests back to wallets. |
 
 ---
 
@@ -42,6 +44,9 @@ An exposed secret can allow an attacker to:
 | `TWILIO_ACCOUNT_SID` | **Semi-public** | N/A | Not a secret by itself but combined with `TWILIO_AUTH_TOKEN` grants full API access. |
 | `TWILIO_AUTH_TOKEN` | **Secret** | Rotate annually or on suspected compromise | |
 | `SENTRY_DSN` | **Non-secret** | N/A | Public ingest URL; safe to expose. |
+| `STATEMENT_SIGNING_PRIVATE_KEY_PEM` | **Secret — high risk** | Rotate on suspected compromise or scheduled key rotation | PKCS#8 PEM for Ed25519 statement manifest signing. Never returned by any API; see `docs/STATEMENT_VERIFICATION.md`. |
+| `STATEMENT_SIGNING_KEY_ID` | **Non-secret** | Update when rotating the signing key | Identifies the public key verifiers must use. |
+| `STATEMENT_SUBJECT_PEPPER` | **Secret** | Rotate every 90 days or on suspected compromise | Daily salt for non-reversible manifest subject hashes. Rotation changes subject hashes but not signatures over already-issued manifests. |
 
 ### Frontend (`frontend/.env.local`, CI env)
 
