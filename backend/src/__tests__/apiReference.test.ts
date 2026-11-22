@@ -36,6 +36,9 @@ jest.unstable_mockModule('../db/connection.js', () => {
     query: connection.query,
     getClient: connection.getClient,
     withTransaction: connection.withTransaction,
+    closePool: jest.fn(),
+    PoolSaturatedError: class PoolSaturatedError extends Error {},
+    TRANSIENT_ERROR_CODES: new Set<string>(),
   };
 });
 

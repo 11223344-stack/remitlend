@@ -11,6 +11,7 @@ import {
   createWebhookSubscription,
   deleteWebhookSubscription,
   getWebhookDeliveries,
+  getWebhookSubscriptionAudit,
   listWebhookDeadLetters,
   redriveWebhookDelivery,
   listQuarantinedEvents,
