@@ -376,5 +376,97 @@
     "notScheduled": "Hindi naka-iskedyul",
     "unknown": "Hindi alam",
     "executableNow": "Maaaring ipatupad ngayon"
+  },
+  "Errors": {
+    "referenceLabel": "ID ng reference",
+    "actions": {
+      "retry": "Subukan ulit",
+      "reauthenticate": "Mag-sign in ulit",
+      "contact_support": "Makipag-ugnayan sa support",
+      "refresh": "I-refresh",
+      "none": "Isara"
+    },
+    "guidance": {
+      "invalidAmount": {
+        "title": "Suriin ang halaga",
+        "message": "Maglagay ng halagang mas malaki sa zero.",
+        "guidance": "Gamitin ang perang ipinapakita sa screen na ito. Hindi awtomatikong binabago ang halaga."
+      },
+      "invalidCredentials": {
+        "title": "Suriin ang iyong pag-sign in",
+        "message": "Hindi napatunayan ang signature ng iyong wallet o ang identifier ng account.",
+        "guidance": "Ikonekta muli ang iyong wallet, aprubahan ang bagong request, at subukan ulit. Hindi sinasalin ang mga address ng wallet."
+      },
+      "invalidInput": {
+        "title": "Suriin ang mga detalye",
+        "message": "May ilang halagang hindi tinanggap.",
+        "guidance": "Suriin ang mga naka-highlight na field at panatilihin ang mga identifier na eksaktong ibinigay."
+      },
+      "sessionExpired": {
+        "title": "Kailangan ang session",
+        "message": "Hindi na aktibo ang iyong ligtas na session.",
+        "guidance": "Mag-sign in muli upang magpatuloy. Huwag ulitin ang pagbabayad hangga’t hindi mo nakikita ang final na status."
+      },
+      "accessDenied": {
+        "title": "Limitado ang access",
+        "message": "Wala kang pahintulot para sa aksyong ito.",
+        "guidance": "Lumipat sa account na may kinakailangang access o makipag-ugnayan sa support gamit ang reference sa ibaba."
+      },
+      "notFound": {
+        "title": "Hindi available",
+        "message": "Hindi namin natagpuan ang hiniling na item.",
+        "guidance": "I-refresh ang listahan at suriin ang identifier bago subukan ulit."
+      },
+      "conflict": {
+        "title": "Nagbago ang estado",
+        "message": "May nagbago habang pinoproseso ang iyong request.",
+        "guidance": "I-refresh upang makita ang pinakabagong estado, at mag-retry lamang kung kailangan pa rin ang aksyon."
+      },
+      "duplicateRequest": {
+        "title": "Naisumite na",
+        "message": "Tinanggap na ang request na ito.",
+        "guidance": "Tingnan ang kasalukuyang status sa halip na isumite ulit; hindi ito magbabago ng resulta."
+      },
+      "rateLimited": {
+        "title": "Maghintay muna",
+        "message": "Masyadong maraming request ang ipinadala sa maikling panahon.",
+        "guidance": "Hintayin ang mungkahing delay, pagkatapos ay subukan nang isang beses."
+      },
+      "unavailable": {
+        "title": "Pansamantalang hindi available",
+        "message": "Hindi tumutugon ang isang kinakailangang serbisyo.",
+        "guidance": "Maghintay at mag-retry. Walang perang lumipat maliban na lang kung may nakumpirmang transaksyon."
+      },
+      "invalidLoan": {
+        "title": "Suriin ang pautang",
+        "message": "Hindi wasto ang identifier o reference ng pautang.",
+        "guidance": "Kopyahin ang identifier na eksaktong ipinapakita sa detalye ng pautang at subukan ulit."
+      },
+      "loanState": {
+        "title": "Nagbago ang estado ng pautang",
+        "message": "Hindi available ang aksyong ito sa kasalukuyang estado ng pautang.",
+        "guidance": "I-refresh ang mga detalye. Ang mga nabayaran nang pautang ay hindi nangangailangan ng karagdagang bayaran."
+      },
+      "insufficientFunds": {
+        "title": "Mababa ang balance",
+        "message": "Hindi sapat ang available na balance ng account.",
+        "guidance": "Magdagdag ng pondo o bawasan ang halaga. Ang eksaktong asset at unit ay ipinapakita sa form."
+      },
+      "blockchain": {
+        "title": "Isyu sa network",
+        "message": "Hindi nakumpirma ng network ang operasyon.",
+        "guidance": "Suriin ang status ng transaksyon bago mag-retry. Huwag ipadala nang dalawang beses ang parehong nilagdaang transaksyon."
+      },
+      "internal": {
+        "title": "May naganap na problema",
+        "message": "Hindi namin natapos ang request.",
+        "guidance": "Subukan muli sandali. Kung magpapatuloy, makipag-ugnayan sa support gamit ang reference sa ibaba."
+      },
+      "fallback": {
+        "title": "Hindi inaasahang error",
+        "message": "Naganap ang hindi inaasahang error.",
+        "guidance": "Mag-retry nang isang beses, pagkatapos ay makipag-ugnayan sa support kung magpapatuloy."
+      }
+    }
   }
 }
