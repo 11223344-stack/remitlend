@@ -204,7 +204,8 @@
     "details": "Mga Detalye"
   },
   "AdminLayout": {
-    "adminArea": "Lugar ng Admin"
+    "adminArea": "Lugar ng Admin",
+    "translationsReview": "Mga pinansyal na pagsasalin"
   },
   "AdminDisputes": {
     "eyebrow": "Pagsusuri ng Admin",
@@ -376,5 +377,36 @@
     "notScheduled": "Hindi naka-iskedyul",
     "unknown": "Hindi alam",
     "executableNow": "Maaaring ipatupad ngayon"
+  },
+  "TranslationReview": {
+    "eyebrow": "QA sa Lokalisasyon",
+    "title": "Pagsusuri ng pinansyal na pagsasalin",
+    "description": "Suriin ang mga terminong pang-pera at pautang batay sa glossary bago ilabas. Nakaugnay ang pag-apruba sa ipinapakitang bersyon ng pinagmulan.",
+    "forbidden": "Kailangan ng role na admin upang suriin ang mga pinansyal na string.",
+    "releaseReady": "Gate ng paglalabas: handa na",
+    "releaseBlocked": "Gate ng paglalabas: naka-block",
+    "reviewed": "{approved} sa {checked} na kasalukuyang pagsusuri",
+    "issues": "Mga hadlang sa paglalabas",
+    "noIssues": "Walang hadlang sa paglalabas.",
+    "source": "Pinagmulan",
+    "translation": "Pagsasalin",
+    "context": "Konteksto",
+    "glossary": "Glossary",
+    "status": "Status",
+    "approve": "Aprubahan",
+    "reject": "Humingi ng pagbabago",
+    "approved": "Naaprubahan",
+    "rejected": "Hiniling ang pagbabago",
+    "pending": "Nakabinbin",
+    "reviewer": "Tagasuri",
+    "reviewedAt": "Sinuri",
+    "none": "-",
+    "stale": "Nagbago ang pinagmulan mula sa pagsusuri",
+    "update": "Aprubahan ang kasalukuyang pinagmulan",
+    "updated": "Naitala ang pagsusuri.",
+    "error": "Hindi naitala ang pagsusuri.",
+    "locale": "Wika",
+    "key": "Key",
+    "actions": "Mga aksyon"
   }
 }

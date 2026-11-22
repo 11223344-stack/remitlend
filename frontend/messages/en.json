@@ -204,7 +204,8 @@
     "details": "Details"
   },
   "AdminLayout": {
-    "adminArea": "Admin Area"
+    "adminArea": "Admin Area",
+    "translationsReview": "Financial translations"
   },
   "AdminDisputes": {
     "eyebrow": "Admin Review",
@@ -376,5 +377,36 @@
     "notScheduled": "Not scheduled",
     "unknown": "Unknown",
     "executableNow": "Executable now"
+  },
+  "TranslationReview": {
+    "eyebrow": "Localization QA",
+    "title": "Financial translation review",
+    "description": "Review money and loan terms against the glossary before release. Approvals are bound to the source revision shown.",
+    "forbidden": "You need the admin role to review financial strings.",
+    "releaseReady": "Release gate: ready",
+    "releaseBlocked": "Release gate: blocked",
+    "reviewed": "{approved} of {checked} current reviews",
+    "issues": "Blocking issues",
+    "noIssues": "No blocking issues.",
+    "source": "Source",
+    "translation": "Translation",
+    "context": "Context",
+    "glossary": "Glossary",
+    "status": "Status",
+    "approve": "Approve",
+    "reject": "Request changes",
+    "approved": "Approved",
+    "rejected": "Changes requested",
+    "pending": "Pending",
+    "reviewer": "Reviewer",
+    "reviewedAt": "Reviewed",
+    "none": "-",
+    "stale": "Source changed since review",
+    "update": "Approve current source",
+    "updated": "Review recorded.",
+    "error": "Review could not be recorded.",
+    "locale": "Locale",
+    "key": "Key",
+    "actions": "Actions"
   }
 }
