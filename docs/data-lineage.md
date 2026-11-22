@@ -62,6 +62,12 @@ The Stellar ledger is the **ultimate authority**. Any discrepancy between the
 database and on-chain state must be resolved in favour of on-chain state by
 running `scoreReconciliationService`.
 
+`abuse_telemetry_events` is explicitly **not** a score input. The privacy-safe
+abuse telemetry added for #852 records only coarse action frequency, outcome,
+and risk tier, and carries no amount, currency, wallet address, or identity
+field. It cannot affect `scores`, loan terms, balances, or settlement; see
+[ABUSE_TELEMETRY.md](./ABUSE_TELEMETRY.md) for the full contract.
+
 ---
 
 ## Data Flow

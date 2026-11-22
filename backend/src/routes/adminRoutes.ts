@@ -45,10 +45,18 @@ import {
   getRequest as getPrivilegedRequest,
 } from '../services/privilegedActionService.js';
 import { AppError } from '../errors/AppError.js';
+import { getAbuseTelemetryReport } from '../controllers/abuseTelemetryController.js';
 
 const router = Router();
 
 router.get('/audit-logs', requireJwtAuth, requireRoles('admin'), listAuditLogs);
+
+router.get(
+  '/abuse-telemetry',
+  requireJwtAuth,
+  requireRoles('admin'),
+  asyncHandler(getAbuseTelemetryReport),
+);
 
 router.post(
   '/loans/:loanId/build-reject',

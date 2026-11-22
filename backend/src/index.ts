@@ -48,6 +48,10 @@ import {
   startSorobanWriteReplayProcessor,
   stopSorobanWriteReplayProcessor,
 } from './services/sorobanWriteReplayProcessor.js';
+import {
+  startAbuseTelemetryRetentionScheduler,
+  stopAbuseTelemetryRetentionScheduler,
+} from './services/abuseTelemetryService.js';
 
 const port = process.env.PORT || 3001;
 
@@ -110,6 +114,9 @@ const server = app.listen(port, () => {
   // Start periodic notification cleanup
   startNotificationCleanupScheduler();
 
+  // Start periodic abuse telemetry retention purge
+  startAbuseTelemetryRetentionScheduler();
+
   // Start loan due check cron
   startLoanDueCheckCron();
 
@@ -168,6 +175,7 @@ const shutdown = async (signal: 'SIGTERM' | 'SIGINT') => {
     stopScoreReconciliationScheduler();
     stopCrossContractReconciler();
     stopNotificationCleanupScheduler();
+    stopAbuseTelemetryRetentionScheduler();
     logger.info('All schedulers stopped.');
 
     // Step 3: Close event streams
