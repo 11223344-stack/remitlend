@@ -377,6 +377,42 @@
     "unknown": "Desconocido",
     "executableNow": "Ejecutable ahora"
   },
+  "Offers": {
+    "title": "Comparar ofertas de préstamos y pool",
+    "description": "Ordena columnas con el teclado o compara las tarjetas en pantallas pequeñas. Los importes conservan su moneda de origen.",
+    "caption": "Comparación de ofertas de préstamos y pool. Los encabezados de columna ordenan la tabla; cada nombre de fila es un encabezado de fila.",
+    "summary": "Se muestran {visible} de {total} ofertas. Ordenadas por {column} {direction}. Filtros: {filters}.",
+    "sortAction": "Activar para ordenar por esta columna",
+    "sortAscending": "ascendente",
+    "sortDescending": "descendente",
+    "loanName": "Préstamo {id}",
+    "poolName": "Pool de préstamos",
+    "rate": "{value}%",
+    "termNone": "Flexible",
+    "filters": {
+      "searchLabel": "Buscar ofertas",
+      "searchPlaceholder": "Buscar por nombre o ID",
+      "currencyLabel": "Moneda",
+      "kindLabel": "Tipo de oferta",
+      "statusLabel": "Estado",
+      "all": "Todas",
+      "loan": "Préstamo",
+      "pool": "Pool"
+    },
+    "columns": {
+      "name": "Oferta",
+      "kind": "Tipo",
+      "amount": "Importe disponible",
+      "ratePercent": "Tasa / APY",
+      "termDays": "Plazo (días)",
+      "status": "Estado"
+    },
+    "states": {
+      "loading": "Cargando ofertas…",
+      "error": "No se pudieron cargar las ofertas. Reintentar desde el portal de prestamistas.",
+      "empty": "Ninguna oferta coincide con los filtros actuales.",
+      "invalid": "Esa acción de ordenación o filtro no era válida y se ignoró."
+    }
   "Privacy": {
     "title": "Privacidad",
     "description": "Controla cómo se muestran los datos confidenciales de la cuenta en este dispositivo.",
