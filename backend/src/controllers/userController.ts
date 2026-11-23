@@ -3,7 +3,12 @@ import { query } from '../db/connection.js';
 import { AppError } from '../errors/AppError.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
 import { getTransferHistoryPage } from '../services/transferHistoryService.js';
+import { CacheKeys, invalidateOnProfileUpdate } from '../utils/cacheKeys.js';
+import { readThrough } from '../utils/cacheContracts.js';
 import type { UpdateUserProfileInput } from '../schemas/userSchemas.js';
+
+/** Profile reads are cached briefly; PATCH /user/profile busts the entry. */
+const USER_PROFILE_CACHE_TTL_SECONDS = 120;
 
 interface UserProfileRow {
   id: number;
@@ -79,8 +84,13 @@ export const getUserProfile = asyncHandler(async (req: Request, res: Response) =
     throw AppError.unauthorized('Authentication required');
   }
 
-  const profile = await getOrCreateProfile(publicKey);
-  res.json(serializeProfile(profile));
+  const profile = await readThrough(
+    'user_profile',
+    CacheKeys.userProfile(publicKey),
+    USER_PROFILE_CACHE_TTL_SECONDS,
+    async () => serializeProfile(await getOrCreateProfile(publicKey)),
+  );
+  res.json(profile);
 });
 
 export const updateUserProfile = asyncHandler(async (req: Request, res: Response) => {
@@ -151,6 +161,8 @@ export const updateUserProfile = asyncHandler(async (req: Request, res: Response
   if (!updated) {
     throw AppError.notFound('User profile not found');
   }
+
+  await invalidateOnProfileUpdate(publicKey);
 
   res.json(serializeProfile(updated));
 });
