@@ -37,6 +37,88 @@ export const chainConfirmationDurationHistogram = new client.Histogram({
   registers: [metricsRegistry],
 });
 
+// ---------------------------------------------------------------------------
+// Per-network transaction submission telemetry (#857)
+// ---------------------------------------------------------------------------
+// Throughput, latency, throttling and error rates are recorded per configured
+// network endpoint (label `network` = the endpoint id, low cardinality).
+// These complement the existing chain_confirmation_* metrics, which capture
+// only the final confirmation outcome and are not network-labelled.
+
+export const txSubmissionTotalCounter = new client.Counter({
+  name: 'tx_submission_total',
+  help: 'Transaction submission attempts per network, by outcome (submitted, queued, failed, throttled, duplicate, dead_lettered).',
+  labelNames: ['network', 'outcome'] as const,
+  registers: [metricsRegistry],
+});
+
+export const txSubmissionDurationHistogram = new client.Histogram({
+  name: 'tx_submission_duration_seconds',
+  help: 'Wall-clock seconds from submission attempt to resolved outcome, per network.',
+  labelNames: ['network'] as const,
+  buckets: [0.25, 0.5, 1, 2, 5, 10, 20, 30, 60, 120],
+  registers: [metricsRegistry],
+});
+
+export const txSubmissionThrottledCounter = new client.Counter({
+  name: 'tx_submission_throttled_total',
+  help: 'Times the network asked the client to retry later (TRY_AGAIN_LATER / throttle), per network.',
+  labelNames: ['network'] as const,
+  registers: [metricsRegistry],
+});
+
+export const txSubmissionErrorsCounter = new client.Counter({
+  name: 'tx_submission_errors_total',
+  help: 'Transaction submission errors per network, by error class (transient, rejected, poll_error, no_endpoint).',
+  labelNames: ['network', 'error_class'] as const,
+  registers: [metricsRegistry],
+});
+
+export const txSubmissionInFlightGauge = new client.Gauge({
+  name: 'tx_submission_in_flight',
+  help: 'Transactions currently mid-submission (send + poll) per network.',
+  labelNames: ['network'] as const,
+  registers: [metricsRegistry],
+});
+
+export const txSubmissionCircuitStateGauge = new client.Gauge({
+  name: 'tx_submission_circuit_state',
+  help: 'Per-network circuit breaker state (0 = closed, 1 = half-open, 2 = open).',
+  labelNames: ['network'] as const,
+  registers: [metricsRegistry],
+});
+
+export const sorobanWriteQueueDepthGauge = new client.Gauge({
+  name: 'soroban_write_queue_depth',
+  help: 'Signed writes waiting in the durable Soroban write queue (pending).',
+  registers: [metricsRegistry],
+});
+
+export const sorobanWriteQueueDeadLetterDepthGauge = new client.Gauge({
+  name: 'soroban_write_queue_dead_letter_depth',
+  help: 'Signed writes dead-lettered (exhausted retries) in the Soroban write queue.',
+  registers: [metricsRegistry],
+});
+
+export const sorobanWriteQueueDeadLetteredCounter = new client.Counter({
+  name: 'soroban_write_queue_dead_lettered_total',
+  help: 'Cumulative signed writes moved to the dead-letter store after exhausting bounded retries.',
+  registers: [metricsRegistry],
+});
+
+export const txSubmissionStormAlertGauge = new client.Gauge({
+  name: 'tx_submission_storm_alert_active',
+  help: '1 when a retry-storm alert is active (submission backpressure), 0 when healthy.',
+  registers: [metricsRegistry],
+});
+
+export const txSubmissionFailoverCounter = new client.Counter({
+  name: 'tx_submission_failover_total',
+  help: 'Network failover events by type (failover_activated, failover_deactivated, failover_exhausted).',
+  labelNames: ['event_type'] as const,
+  registers: [metricsRegistry],
+});
+
 export const indexerLastLedgerGauge = new client.Gauge({
   name: 'indexer_last_ledger',
   help: 'Last ledger successfully processed by the event indexer.',
