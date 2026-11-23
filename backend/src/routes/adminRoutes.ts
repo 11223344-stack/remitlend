@@ -1,4 +1,9 @@
-import { Router } from 'express';
+import { Router, type Response } from 'express';
+import type { Pool } from 'pg';
+import {
+  DiagnosticBundleError,
+  DiagnosticBundleService,
+} from '../services/diagnosticBundleService.js';
 import { z } from 'zod';
 import { requireApiKey } from '../middleware/auth.js';
 import { requireJwtAuth, requireRoles, requireScopes } from '../middleware/jwtAuth.js';
@@ -108,6 +113,51 @@ import {
 
 const router = Router();
 
+const diagnostics = () => new DiagnosticBundleService({ query } as unknown as Pool);
+const handleDiagnosticError = (err: unknown, next: (e?: unknown) => void, res: Response) => {
+  if (err instanceof DiagnosticBundleError) {
+    res.status(err.statusCode).json({ success: false, error: err.code, message: err.message });
+    return;
+  }
+  next(err);
+};
+
+/** Collect a signed diagnostic bundle (loan, events, txs, notifications, audit, scores). */
+router.get(
+  '/diagnostics/bundles/:loanId',
+  requireJwtAuth,
+  requireRoles('admin'),
+  requireScopes('admin:diagnostics'),
+  strictRateLimiter,
+  async (req, res, next) => {
+    try {
+      const loanId = Number(req.params.loanId);
+      const signed = await diagnostics().collectLoanBundle(
+        loanId,
+        (req as unknown as { user?: { publicKey: string } }).user?.publicKey ?? 'admin',
+      );
+      res.json({ success: true, ...signed });
+    } catch (err) {
+      handleDiagnosticError(err, next, res);
+    }
+  },
+);
+
+/** Raw XDR + submission parameters for re-submission via Stellar Laboratory. */
+router.get(
+  '/diagnostics/replay/:transactionId',
+  requireJwtAuth,
+  requireRoles('admin'),
+  requireScopes('admin:diagnostics'),
+  strictRateLimiter,
+  async (req, res, next) => {
+    try {
+      const replay = await diagnostics().getReplayData(String(req.params.transactionId));
+      res.json({ success: true, ...replay });
+    } catch (err) {
+      handleDiagnosticError(err, next, res);
+    }
+  },
 const onboardAssetSchema = z.object({
   assetCode: z.string().regex(/^[A-Za-z0-9]{1,12}$/),
   issuer: z.string().regex(/^G[A-Z2-7]{55}$/),

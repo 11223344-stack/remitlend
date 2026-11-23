@@ -90,6 +90,20 @@ export async function getAuditLogs(filters: AuditLogFilters) {
   };
 }
 
+export const auditLogService = {
+  async log(entry: {
+    action: string;
+    actor: string;
+    target?: string;
+    metadata?: Record<string, unknown>;
+  }): Promise<void> {
+    await query(
+      `INSERT INTO audit_logs (actor, action, target, payload, status)
+       VALUES ($1, $2, $3, $4, 'success')`,
+      [entry.actor, entry.action, entry.target ?? null, JSON.stringify(entry.metadata ?? {})],
+    );
+  },
+};
 // ─── Tamper-evident HMAC chain (#796) ────────────────────────────────────────
 
 /** prev_hmac of the first chained entry. Public and deterministic by design. */
