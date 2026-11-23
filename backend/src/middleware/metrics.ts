@@ -572,6 +572,11 @@ export const dbPoolRejectedCounter = new client.Counter({
 });
 
 
+export const webhookUncertifiedConsumersGauge = new client.Gauge({
+  name: 'webhook_uncertified_consumers_total',
+  help: 'Total number of active webhook consumers lacking verified certification',
+  registers: [metricsRegistry],
+});
 export const discrepancyLedgerUnacknowledgedGauge = new client.Gauge({
   name: 'discrepancy_ledger_unacknowledged_total',
   help: 'Total count of unacknowledged financial reconciliation discrepancies',
