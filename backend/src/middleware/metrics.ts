@@ -572,6 +572,11 @@ export const dbPoolRejectedCounter = new client.Counter({
 });
 
 
+export const discrepancyLedgerUnacknowledgedGauge = new client.Gauge({
+  name: 'discrepancy_ledger_unacknowledged_total',
+  help: 'Total count of unacknowledged financial reconciliation discrepancies',
+  registers: [metricsRegistry],
+});
 export const dbConnectionsActiveGauge = new client.Gauge({
   name: 'db_connections_active',
   help: 'Number of active PostgreSQL connections currently checked out of the pool',
