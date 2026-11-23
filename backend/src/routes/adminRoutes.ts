@@ -64,6 +64,11 @@ import {
   getRequest as getPrivilegedRequest,
 } from '../services/privilegedActionService.js';
 import {
+  listEvidenceHandler,
+  getEvidenceHandler,
+  verifyEvidenceHandler,
+  getEvidenceMetaHandler,
+} from '../controllers/evidenceProvenanceController.js';
   createRecoveryActionHandler,
   listRecoveryActionsHandler,
   getRecoveryActionHandler,
@@ -813,6 +818,16 @@ router.post(
 );
 
 // ---------------------------------------------------------------------------
+// Signed evidence provenance (#848) — admin read-only endpoints.
+// Writes are performed internally by ingestion jobs; no public POST endpoint
+// prevents injecting fabricated evidence from outside the trust boundary.
+// ---------------------------------------------------------------------------
+
+/**
+ * @swagger
+ * /admin/evidence-provenance/meta:
+ *   get:
+ *     summary: Supported record types and verification result values
 // Signed operator recovery actions (#866)
 // ---------------------------------------------------------------------------
 
@@ -869,6 +884,13 @@ const rejectRecoverySchema = z.object({
  *       - BearerAuth: []
  *     responses:
  *       200:
+ *         description: Evidence provenance metadata
+ */
+router.get(
+  '/evidence-provenance/meta',
+  requireJwtAuth,
+  requireRoles('admin'),
+  getEvidenceMetaHandler,
  *         description: Metadata for recovery action creation
  */
 router.get(
@@ -1003,6 +1025,25 @@ router.delete(
 
 /**
  * @swagger
+ * /admin/evidence-provenance:
+ *   get:
+ *     summary: List evidence provenance records
+ *     description: >
+ *       Returns a paginated, immutable list of evidence provenance records.
+ *       Supports filtering by record_type, source_identity, and verification_result.
+ *       Use cursor (ISO timestamp) for keyset pagination.
+ *     tags: [Admin]
+ *     security:
+ *       - BearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Evidence provenance records
+ */
+router.get(
+  '/evidence-provenance',
+  requireJwtAuth,
+  requireRoles('admin'),
+  listEvidenceHandler,
  * /admin/cache/projections:
  *   delete:
  *     summary: Bulk-delete cached financial projections for multiple users
@@ -1109,6 +1150,23 @@ router.post(
 
 /**
  * @swagger
+ * /admin/evidence-provenance/{id}:
+ *   get:
+ *     summary: Get a single evidence provenance record
+ *     tags: [Admin]
+ *     security:
+ *       - BearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Evidence record
+ *       404:
+ *         description: Not found
+ */
+router.get(
+  '/evidence-provenance/:id',
+  requireJwtAuth,
+  requireRoles('admin'),
+  getEvidenceHandler,
  * /admin/recovery-actions:
  *   get:
  *     summary: List operator recovery actions
@@ -1133,6 +1191,24 @@ router.get(
 
 /**
  * @swagger
+ * /admin/evidence-provenance/{id}/verify:
+ *   get:
+ *     summary: Verify the HMAC integrity of a stored evidence record
+ *     description: >
+ *       Re-computes the row HMAC and returns { valid: true/false }.
+ *       A false result means the row was tampered with after insertion.
+ *     tags: [Admin]
+ *     security:
+ *       - BearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Verification result
+ */
+router.get(
+  '/evidence-provenance/:id/verify',
+  requireJwtAuth,
+  requireRoles('admin'),
+  verifyEvidenceHandler,
  * /admin/recovery-actions:
  *   post:
  *     summary: Submit a signed operator recovery action
