@@ -192,6 +192,10 @@ export const envSchema = z.object({
    */
   DIAGNOSTIC_BUNDLE_MAX_BYTES: positiveInt(1).default(65536 as unknown as never),
 
+  STATEMENT_SIGNING_PRIVATE_KEY_PEM: optionalString(),
+  STATEMENT_SIGNING_KEY_ID: optionalString().default('statement-signing-default'),
+  STATEMENT_SUBJECT_PEPPER: optionalString(),
+
   // ── External services (optional) ─────────────────────────────────────────
   SENTRY_DSN: optionalString(),
 

@@ -62,6 +62,13 @@ The Stellar ledger is the **ultimate authority**. Any discrepancy between the
 database and on-chain state must be resolved in favour of on-chain state by
 running `scoreReconciliationService`.
 
+`statement_manifest_issuances` records only the signed manifest text, key ID,
+source type, schema version, row count, daily salted subject hash, and issue
+timestamp for downloadable statement exports. It contains no CSV bytes, amounts,
+wallet addresses, or private signing material, is never a score or balance
+input, and cannot affect settlement. See
+[STATEMENT_VERIFICATION.md](./STATEMENT_VERIFICATION.md).
+
 ---
 
 ## Data Flow

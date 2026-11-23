@@ -8,6 +8,19 @@ Secret scanning is enforced in two places so that credentials are never committe
 
 ### 1. Pre-commit hook (local)
 
+| Secret class | Impact if exposed |
+|---|---|
+| `JWT_SECRET` | Forge JWT tokens for any user, including admin. |
+| `INTERNAL_API_KEY` | Call any scoped internal API endpoint without a valid JWT. |
+| `LOAN_MANAGER_ADMIN_SECRET` | Submit on-chain admin transactions (approve loans, pause contracts). |
+| `SCORE_RECONCILIATION_SOURCE_SECRET` | Read-only Stellar key; can enumerate borrower scores. |
+| `SENDGRID_API_KEY` | Send arbitrary email from the RemitLend domain. |
+| `TWILIO_AUTH_TOKEN` / `TWILIO_ACCOUNT_SID` | Send SMS from the RemitLend number. |
+| `SENTRY_AUTH_TOKEN` | Upload source maps; can deanonymise stack traces. |
+| `DATABASE_URL` | Full read/write access to the PostgreSQL database (PII, loan data). |
+| `REDIS_URL` | Read/write rate-limit counters, JWT revocation list, idempotency keys. |
+| `STATEMENT_SIGNING_PRIVATE_KEY_PEM` | Forge signed statement manifests for any wallet. |
+| `STATEMENT_SUBJECT_PEPPER` | Correlate daily subject hashes in statement manifests back to wallets. |
 A Husky pre-commit hook runs Gitleaks against staged changes before every commit:
 
 ```sh
@@ -18,6 +31,21 @@ If a secret is detected, the commit is blocked. To proceed you must remove the s
 
 Install Gitleaks locally (see https://github.com/gitleaks/gitleaks) and ensure it is on your `PATH` before committing.
 
+| Variable | Classification | Rotation policy | Notes |
+|---|---|---|---|
+| `JWT_SECRET` | **Secret** | Rotate every 90 days or on suspected compromise | Min 32 bytes, random. Invalidates all active sessions on rotation. |
+| `INTERNAL_API_KEY` | **Secret** | Rotate every 90 days or on staff offboarding | Comma-separated list of scoped keys; see `docs/SECURITY-MODEL.md`. |
+| `LOAN_MANAGER_ADMIN_SECRET` | **Secret — high risk** | Rotate on any suspected compromise | Stellar secret key (`S…`). Controls on-chain admin operations. Store in HSM/vault in production. |
+| `SCORE_RECONCILIATION_SOURCE_SECRET` | **Secret** | Rotate every 180 days | Read-only Stellar key for score reads. |
+| `DATABASE_URL` | **Secret** | Managed by infrastructure team | Contains username and password for PostgreSQL. |
+| `REDIS_URL` | **Secret** | Managed by infrastructure team | May contain auth token depending on Redis ACL config. |
+| `SENDGRID_API_KEY` | **Secret** | Rotate annually or on suspected compromise | Restricted to sending only; never grant template/domain management. |
+| `TWILIO_ACCOUNT_SID` | **Semi-public** | N/A | Not a secret by itself but combined with `TWILIO_AUTH_TOKEN` grants full API access. |
+| `TWILIO_AUTH_TOKEN` | **Secret** | Rotate annually or on suspected compromise | |
+| `SENTRY_DSN` | **Non-secret** | N/A | Public ingest URL; safe to expose. |
+| `STATEMENT_SIGNING_PRIVATE_KEY_PEM` | **Secret — high risk** | Rotate on suspected compromise or scheduled key rotation | PKCS#8 PEM for Ed25519 statement manifest signing. Never returned by any API; see `docs/STATEMENT_VERIFICATION.md`. |
+| `STATEMENT_SIGNING_KEY_ID` | **Non-secret** | Update when rotating the signing key | Identifies the public key verifiers must use. |
+| `STATEMENT_SUBJECT_PEPPER` | **Secret** | Rotate every 90 days or on suspected compromise | Daily salt for non-reversible manifest subject hashes. Rotation changes subject hashes but not signatures over already-issued manifests. |
 ### 2. CI supply-chain audit (remote)
 
 The reusable supply-chain audit workflow (`.github/workflows/reusable-supply-chain-audit.yml`) runs a full-repository scan on every push and pull request:

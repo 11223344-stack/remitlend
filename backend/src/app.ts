@@ -22,6 +22,7 @@ import notificationsRoutes from './routes/notificationsRoutes.js';
 import eventRoutes from './routes/eventRoutes.js';
 import remittanceRoutes from './routes/remittanceRoutes.js';
 import transactionRoutes from './routes/transactionRoutes.js';
+import statementRoutes from './routes/statementRoutes.js';
 import orphanedTxRoutes from './routes/orphanedTxRoutes.js';
 import { registerStatusRoutes } from './routes/statusRoutes.js';
 import internalRoutes from './routes/internalRoutes.js';
@@ -489,6 +490,7 @@ app.use('/api/notifications', notificationsRoutes);
 app.use('/api/events', eventRoutes);
 app.use('/api/remittances', remittanceRoutes);
 app.use('/api/transactions', transactionRoutes);
+app.use('/api/statements', statementRoutes);
 
 // Orphaned transaction reconciliation routes (issue #858)
 app.use('/api/transactions', orphanedTxRoutes);
@@ -508,6 +510,7 @@ app.use('/api/v1/transactions', orphanedTxRoutes);
 app.use('/api/v1/pool', poolRoutes);
 app.use('/api/v1/notifications', notificationsRoutes);
 app.use('/api/v1/events', eventRoutes);
+app.use('/api/v1/statements', statementRoutes);
 app.use('/user', userRoutes);
 
 // Internal service-to-service routes (HMAC-signed only)
