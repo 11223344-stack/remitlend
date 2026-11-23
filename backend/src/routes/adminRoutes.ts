@@ -32,12 +32,22 @@ import { query } from '../db/connection.js';
 import { buildRejectLoanTx } from '../controllers/loanController.js';
 import { listAuditLogs } from '../controllers/authController.js';
 import {
+  deleteUserProjectionCache,
+  bulkDeleteUserProjectionCache,
+  revokeUserProjectionCache,
+  verifyUserProjectionDeletion,
+} from '../controllers/projectionDeletionController.js';
+import {
   listLoanStateEventsEndpoint,
   replayLoanStateEndpoint,
 } from '../controllers/loanStateEventController.js';
 
 import { listDiscrepancies } from '../services/discrepancyLedgerService.js';
 import breakGlassRoutes from './breakGlassRoutes.js';
+import {
+  listTransactionReconciliations,
+  resolveOrphanedTransaction,
+} from '../controllers/orphanedTxController.js';
 import {
   createRequest as createPrivilegedRequest,
   approveRequest as approvePrivilegedRequest,
@@ -46,6 +56,30 @@ import {
   getRequest as getPrivilegedRequest,
 } from '../services/privilegedActionService.js';
 import { AppError } from '../errors/AppError.js';
+import {
+  recordChange,
+  listChanges,
+  getChange,
+  recoverChange,
+  createSnapshot,
+  reviewSnapshot,
+  listSnapshots,
+} from '../controllers/configIntegrityController.js';
+  adminInitiateErasure,
+  listErasureRequests,
+  getErasureRequest,
+  executeErasure,
+  getErasureCertificate,
+} from '../controllers/erasureController.js';
+  initiateReview,
+  approveReview,
+  listReviews,
+  getReview,
+  getCurrentReviews,
+  recordChange,
+  listChanges,
+  runGateCheck,
+} from '../controllers/threatModelController.js';
 
 const router = Router();
 
@@ -722,8 +756,774 @@ router.post(
   }),
 );
 
+// ── Secure deletion of cached financial projections (#853) ────────────────────
+
+/**
+ * @swagger
+ * /admin/cache/projections/{userId}:
+ *   delete:
+ *     summary: Securely delete all cached financial projections for a user
+ *     description: >
+ *       Deletes every Redis key that backs a user-visible financial projection
+ *       for the given wallet address, including versioned SWR score keys, legacy
+ *       key formats, on-chain score history, NFT metadata, and borrower loan
+ *       aggregates. The authoritative source of truth (database / chain) is
+ *       never modified.
+ *
+ *       Returns 200 when all keys are confirmed deleted. Returns 207 when at
+ *       least one key deletion could not be confirmed (Redis unreachable) — in
+ *       that case the response body contains per-key outcomes and the
+ *       authoritative data remains correct.
+ *
+ *       Sets `Cache-Invalidation-Token: projections:{userId}` on the response
+ *       so the browser-side read cache can evict matching in-memory entries.
+ *     tags: [Admin]
+ *     security:
+ *       - BearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: userId
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Stellar wallet address of the subject
+ *     responses:
+ *       200:
+ *         description: All projection cache keys confirmed deleted
+ *         headers:
+ *           Cache-Invalidation-Token:
+ *             schema:
+ *               type: string
+ *             description: Comma-separated eviction tokens for browser caches
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ProjectionDeletionResult'
+ *       207:
+ *         description: Partial deletion — Redis unreachable for one or more keys
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ProjectionDeletionResult'
+ *       400:
+ *         description: Invalid userId
+ *       401:
+ *         description: Missing or invalid JWT
+ *       403:
+ *         description: Caller does not have admin role
+ */
+router.delete(
+  '/cache/projections/:userId',
+  requireJwtAuth,
+  requireRoles('admin'),
+  strictRateLimiter,
+  auditLog,
+  deleteUserProjectionCache,
+);
+
+/**
+ * @swagger
+ * /admin/cache/projections:
+ *   delete:
+ *     summary: Bulk-delete cached financial projections for multiple users
+ *     description: >
+ *       Deletes all projection cache keys for each userId in the request body.
+ *       At most 100 subjects per request. Subjects are processed in parallel;
+ *       failure for one subject does not abort the others.
+ *     tags: [Admin]
+ *     security:
+ *       - BearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [userIds]
+ *             properties:
+ *               userIds:
+ *                 type: array
+ *                 items:
+ *                   type: string
+ *                 maxItems: 100
+ *     responses:
+ *       200:
+ *         description: All keys confirmed deleted
+ *       207:
+ *         description: Partial deletion — some Redis keys unconfirmed
+ *       400:
+ *         description: Validation error
+ *       403:
+ *         description: Caller does not have admin role
+ */
+router.delete(
+  '/cache/projections',
+  requireJwtAuth,
+  requireRoles('admin'),
+  strictRateLimiter,
+  auditLog,
+  bulkDeleteUserProjectionCache,
+);
+
+/**
+ * @swagger
+ * /admin/cache/projections/revoke:
+ *   post:
+ *     summary: Revoke cached projections with an explicit compliance reason
+ *     description: >
+ *       Identical to DELETE but writes a REVOKE audit record with an explicit
+ *       reason string so compliance tools can filter revocations from routine
+ *       invalidations independently.
+ *     tags: [Admin]
+ *     security:
+ *       - BearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [userId, reason]
+ *             properties:
+ *               userId:
+ *                 type: string
+ *               reason:
+ *                 type: string
+ *                 maxLength: 500
+ *     responses:
+ *       200:
+ *         description: Projections revoked and audit record written
+ *       207:
+ *         description: Partial deletion — Redis unreachable for some keys
+ *       400:
+ *         description: Validation error
+ *       403:
+ *         description: Caller does not have admin role
+ */
+router.post(
+  '/cache/projections/revoke',
+  requireJwtAuth,
+  requireRoles('admin'),
+  strictRateLimiter,
+  auditLog,
+  revokeUserProjectionCache,
+);
+
+/**
+ * @swagger
+ * /admin/cache/projections/{userId}/verify:
+ *   get:
+ *     summary: Verify no stale projection cache remains for a user
+ *     description: >
+ *       Read-only check: returns `verified: true` when no projection keys
+ *       survive in Redis, or `verified: false` with the list of surviving keys
+ *       when stale entries remain after a deletion attempt.
+ *       This endpoint is idempotent and performs no deletions.
+ *     tags: [Admin]
+ *     security:
+ *       - BearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: userId
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Verification result
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     subject:
+ *                       type: string
+ *                     survivingKeys:
+ *                       type: array
+ *                       items:
+ *                         type: string
+ *                     verified:
+ *                       type: boolean
+ *       400:
+ *         description: Invalid userId
+ *       403:
+ *         description: Caller does not have admin role
+ */
+router.get(
+  '/cache/projections/:userId/verify',
+  requireJwtAuth,
+  requireRoles('admin'),
+  verifyUserProjectionDeletion,
+);
+
 export default router;
 
 // ── Break-glass emergency access (issue #849) ────────────────────────────
 // Mounts all break-glass routes under /admin/break-glass (and v1 equivalent).
 router.use('/', breakGlassRoutes);
+
+// ── Cryptographic erasure (#847) ─────────────────────────────────────────────
+
+/**
+ * @swagger
+ * /admin/erasure:
+ *   post:
+ *     summary: Admin-initiated erasure request on behalf of a user
+ *     tags: [Admin, Erasure]
+// ── Threat-model refresh gate (#856) ─────────────────────────────────────────
+
+/**
+ * @swagger
+ * /admin/threat-model/reviews:
+ *   post:
+ *     summary: Initiate an annual threat-model review for a trust boundary
+ *     description: >
+ *       Starts a draft review. A second admin must call /approve before it
+ *       counts as a current review and unblocks the production release gate.
+ *       Duplicate drafts by the same reviewer for the same boundary are rejected.
+ *     tags: [Admin, ThreatModel]
+ *     security:
+ *       - BearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [user_public_key, reason]
+ *             properties:
+ *               user_public_key:
+ *                 type: string
+ *               reason:
+ *                 type: string
+ *                 enum: [right_to_erasure, account_closure, gdpr_article_17, ccpa_deletion, other]
+ *               consent_ref:
+ *             required: [boundary, document_hash]
+ *             properties:
+ *               boundary:
+ *                 type: string
+ *                 enum: [wallet, provider, api, contract, infra]
+ *               document_hash:
+ *                 type: string
+ *                 description: SHA-256 hex of the threat-model document content
+ *               mitigations:
+ *                 type: array
+ *                 items:
+ *                   type: object
+ *                   required: [id, description, status]
+ *               approval_ref:
+ *                 type: string
+ *                 nullable: true
+ *     responses:
+ *       202:
+ *         description: Request queued
+ *       409:
+ *         description: Duplicate or active financial obligation
+ */
+router.post(
+  '/erasure',
+ *         description: Review draft created
+ *       409:
+ *         description: Duplicate draft for this boundary + reviewer
+ */
+router.post(
+  '/threat-model/reviews',
+  requireJwtAuth,
+  requireRoles('admin'),
+  strictRateLimiter,
+  auditLog,
+  asyncHandler(adminInitiateErasure),
+  asyncHandler(initiateReview),
+);
+
+/**
+ * @swagger
+ * /admin/erasure:
+ *   get:
+ *     summary: List erasure requests
+ *     tags: [Admin, Erasure]
+ *     parameters:
+ *       - in: query
+ *         name: status
+ *         schema: { type: string, enum: [pending, in_progress, completed, failed, rejected] }
+ *       - in: query
+ *         name: limit
+ *         schema: { type: integer, default: 50 }
+ *       - in: query
+ *         name: cursor
+ *         schema: { type: string }
+ *     responses:
+ *       200:
+ *         description: Paginated list
+ */
+router.get('/erasure', requireJwtAuth, requireRoles('admin'), asyncHandler(listErasureRequests));
+
+/**
+ * @swagger
+ * /admin/erasure/{id}:
+ *   get:
+ *     summary: Get a single erasure request
+ *     tags: [Admin, Erasure]
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema: { type: string, format: uuid }
+ *     responses:
+ *       200:
+ *         description: Erasure request
+ *       404:
+ *         description: Not found
+ */
+router.get(
+  '/erasure/:id',
+  requireJwtAuth,
+  requireRoles('admin'),
+  asyncHandler(getErasureRequest),
+);
+
+/**
+ * @swagger
+ * /admin/erasure/{id}/execute:
+ *   post:
+ *     summary: Execute a pending erasure — null PII, zero DEKs, revoke KEK, issue certificate
+ *     description: >
+ *       Idempotent guard: completed/in-progress requests are rejected.
+ *       Returns the verifiable erasure certificate on success.
+ *     tags: [Admin, Erasure]
+ *     security:
+ *       - BearerAuth: []
+ *     responses:
+ *       201:
+ *         description: Erasure executed; certificate issued
+ *       409:
+ *         description: Request already completed or in-progress
+ *       404:
+ *         description: Request not found
+ */
+router.post(
+  '/erasure/:id/execute',
+ * /admin/threat-model/reviews/{id}/approve:
+ *   post:
+ *     summary: Approve a draft threat-model review (second-admin gate)
+ *     description: >
+ *       Self-approval is blocked. Approving a review automatically supersedes
+ *       any older approved reviews for the same boundary.
+ *     tags: [Admin, ThreatModel]
+ *     responses:
+ *       200:
+ *         description: Review approved; now counts as current for 365 days
+ *       403:
+ *         description: Self-approval attempt
+ *       409:
+ *         description: Review not in draft state
+ */
+router.post(
+  '/threat-model/reviews/:id/approve',
+  requireJwtAuth,
+  requireRoles('admin'),
+  strictRateLimiter,
+  auditLog,
+  asyncHandler(approveReview),
+);
+
+/** @swagger
+ * /admin/threat-model/reviews:
+ *   get:
+ *     summary: List threat-model reviews (filterable by boundary, status)
+ *     tags: [Admin, ThreatModel]
+ */
+router.get('/threat-model/reviews', requireJwtAuth, requireRoles('admin'), asyncHandler(listReviews));
+
+/** @swagger
+ * /admin/threat-model/reviews/current:
+ *   get:
+ *     summary: Current approved review for every boundary
+ *     tags: [Admin, ThreatModel]
+ */
+router.get(
+  '/threat-model/reviews/current',
+  requireJwtAuth,
+  requireRoles('admin'),
+  asyncHandler(getCurrentReviews),
+);
+
+/** @swagger
+ * /admin/threat-model/reviews/{id}:
+ *   get:
+ *     summary: Single threat-model review with days_until_expiry
+ *     tags: [Admin, ThreatModel]
+ */
+router.get('/threat-model/reviews/:id', requireJwtAuth, requireRoles('admin'), asyncHandler(getReview));
+
+/**
+ * @swagger
+ * /admin/threat-model/changes:
+ *   post:
+ *     summary: Record a trust-boundary change (from CI or manually)
+ *     description: >
+ *       Checks whether a current review exists for the boundary.
+ *       Returns 403 (gate_status=gated) when no current review exists.
+ *       Returns 201 (gate_status=passed) when a current review exists.
+ *       Admin can force-override with force=true + force_reason (audited).
+ *     tags: [Admin, ThreatModel]
+ *     responses:
+ *       201:
+ *         description: Change recorded; gate passed or forced
+ *       403:
+ *         description: No current threat-model review — gate blocked
+ */
+router.post(
+  '/threat-model/changes',
+  requireJwtAuth,
+  requireRoles('admin'),
+  strictRateLimiter,
+  auditLog,
+  asyncHandler(executeErasure),
+);
+
+/**
+ * @swagger
+ * /admin/erasure/{id}/certificate:
+ *   get:
+ *     summary: Fetch and verify the erasure certificate
+ *     description: >
+ *       Re-computes the SHA-256 hash over the stored JSON fields and returns
+ *       hash_verified: true when the certificate has not been tampered with.
+ *     tags: [Admin, Erasure]
+ *     responses:
+ *       200:
+ *         description: Certificate with hash_verified flag
+ *       404:
+ *         description: No certificate for this request
+ */
+router.get(
+  '/erasure/:id/certificate',
+  requireJwtAuth,
+  requireRoles('admin'),
+  asyncHandler(getErasureCertificate),
+);
+
+export default router;
+
+// ── Config integrity monitoring (#854) ───────────────────────────────────────
+
+/**
+ * @swagger
+ * /admin/config-changes:
+ *   post:
+ *     summary: Record a privileged configuration change
+ *     description: >
+ *       Appends an immutable record of a config change. When no approval_ref
+ *       is supplied the change is flagged as 'unauthorized' and an alert is
+ *       dispatched to configured channels. Never modifies existing records.
+ *     tags: [Admin, ConfigIntegrity]
+ *     security:
+ *       - BearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [config_key, new_value]
+ *             properties:
+ *               config_key:
+ *                 type: string
+ *                 example: "loan.interest_rate_percent"
+ *               prior_value:
+ *                 description: Value before this change (null for initial write)
+ *               new_value:
+ *                 description: Value after this change
+ *               approval_ref:
+ *                 type: string
+ *                 nullable: true
+ *                 description: Dual-control approval reference (privileged_action_requests.id or ticket)
+ *               source:
+ *                 type: string
+ *                 enum: [api, direct, recovery, contract]
+ *               effective_at:
+ *                 type: string
+ *                 format: date-time
+ *               requires_approval:
+ *                 type: boolean
+ *                 default: true
+ *     responses:
+ *       201:
+ *         description: Change recorded
+ *       400:
+ *         description: Validation error
+ *       401:
+ *         description: Unauthorized
+ */
+router.post(
+  '/config-changes',
+  requireJwtAuth,
+  requireRoles('admin'),
+  strictRateLimiter,
+  auditLog,
+  recordChange,
+);
+
+/**
+ * @swagger
+ * /admin/config-changes:
+ *   get:
+ *     summary: List privileged configuration changes
+ *     tags: [Admin, ConfigIntegrity]
+ *     security:
+ *       - BearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: config_key
+ *         schema: { type: string }
+ *       - in: query
+ *         name: actor
+ *         schema: { type: string }
+ *       - in: query
+ *         name: status
+ *         schema: { type: string, enum: [applied, unauthorized, recovered] }
+ *       - in: query
+ *         name: source
+ *         schema: { type: string, enum: [api, direct, recovery, contract] }
+ *       - in: query
+ *         name: from
+ *         schema: { type: string, format: date-time }
+ *       - in: query
+ *         name: to
+ *         schema: { type: string, format: date-time }
+ *       - in: query
+ *         name: limit
+ *         schema: { type: integer, default: 50, maximum: 200 }
+ *       - in: query
+ *         name: cursor
+ *         schema: { type: string }
+ *     responses:
+ *       200:
+ *         description: Paginated list of changes
+ */
+router.get('/config-changes', requireJwtAuth, requireRoles('admin'), listChanges);
+
+/**
+ * @swagger
+ * /admin/config-changes/{id}:
+ *   get:
+ *     summary: Get a single config change record
+ *     tags: [Admin, ConfigIntegrity]
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema: { type: string, format: uuid }
+ *     responses:
+ *       200:
+ *         description: Change record
+ *       404:
+ *         description: Not found
+ */
+router.get('/config-changes/:id', requireJwtAuth, requireRoles('admin'), getChange);
+
+/**
+ * @swagger
+ * /admin/config-changes/{id}/recover:
+ *   post:
+ *     summary: Recover a config key to a reviewed snapshot value
+ *     description: >
+ *       Requires a reviewed snapshot and a valid approval reference. Records
+ *       a new change log row with source='recovery'. All prior active rows
+ *       for the key are marked 'recovered'; originals are never deleted.
+ *     tags: [Admin, ConfigIntegrity]
+ *     security:
+ *       - BearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [snapshot_id, approval_ref]
+ *             properties:
+ *               snapshot_id:
+ *                 type: string
+ *                 format: uuid
+ *               approval_ref:
+ *                 type: string
+ *     responses:
+ *       201:
+ *         description: Recovery applied and new change row created
+ *       400:
+ *         description: Snapshot not reviewed or validation error
+ *       404:
+ *         description: Snapshot not found
+ */
+router.post(
+  '/config-changes/:id/recover',
+  requireJwtAuth,
+  requireRoles('admin'),
+  strictRateLimiter,
+  auditLog,
+  recoverChange,
+);
+
+/**
+ * @swagger
+ * /admin/config-snapshots:
+ *   post:
+ *     summary: Capture a reviewed configuration snapshot
+ *     description: >
+ *       Saves the current (or supplied) value of a config key as a snapshot
+ *       that can later be used as a recovery target. Set is_reviewed=true
+ *       only after a second admin has verified the value.
+ *     tags: [Admin, ConfigIntegrity]
+ *     security:
+ *       - BearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [config_key, value]
+ *             properties:
+ *               config_key:
+ *                 type: string
+ *               value:
+ *                 description: The value to snapshot
+ *               review_ref:
+ *                 type: string
+ *                 nullable: true
+ *               is_reviewed:
+ *                 type: boolean
+ *                 default: false
+ *     responses:
+ *       201:
+ *         description: Snapshot created
+ */
+router.post(
+  '/config-snapshots',
+  requireJwtAuth,
+  requireRoles('admin'),
+  strictRateLimiter,
+  auditLog,
+  createSnapshot,
+);
+
+/**
+ * @swagger
+ * /admin/config-snapshots/{id}/review:
+ *   put:
+ *     summary: Mark a snapshot as reviewed (second-admin approval)
+ *     tags: [Admin, ConfigIntegrity]
+ *     security:
+ *       - BearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema: { type: string, format: uuid }
+ *     requestBody:
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               review_ref:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: Snapshot marked reviewed
+ *       404:
+ *         description: Not found
+ */
+router.put(
+  '/config-snapshots/:id/review',
+  requireJwtAuth,
+  requireRoles('admin'),
+  strictRateLimiter,
+  auditLog,
+  reviewSnapshot,
+);
+
+/**
+ * @swagger
+ * /admin/config-snapshots:
+ *   get:
+ *     summary: List configuration snapshots
+ *     tags: [Admin, ConfigIntegrity]
+ *     parameters:
+ *       - in: query
+ *         name: config_key
+ *         schema: { type: string }
+ *       - in: query
+ *         name: is_reviewed
+ *         schema: { type: boolean }
+ *       - in: query
+ *         name: limit
+ *         schema: { type: integer, default: 50, maximum: 200 }
+ *     responses:
+ *       200:
+ *         description: List of snapshots
+ */
+router.get('/config-snapshots', requireJwtAuth, requireRoles('admin'), listSnapshots);
+
+export default router;
+  asyncHandler(recordChange),
+);
+
+/** @swagger
+ * /admin/threat-model/changes:
+ *   get:
+ *     summary: Change inventory (filterable by boundary, gate_status)
+ *     tags: [Admin, ThreatModel]
+ */
+router.get('/threat-model/changes', requireJwtAuth, requireRoles('admin'), asyncHandler(listChanges));
+
+/**
+ * @swagger
+ * /admin/threat-model/gate-check:
+ *   post:
+ *     summary: Run the gate check for a list of changed file paths
+ *     description: >
+ *       Classifies each path against the boundary pattern map and checks
+ *       whether a current review exists for each touched boundary.
+ *       Returns 200 when all boundaries pass; 403 when any boundary is gated.
+ *     tags: [Admin, ThreatModel]
+ *     responses:
+ *       200:
+ *         description: All touched boundaries have current reviews
+ *       403:
+ *         description: One or more boundaries lack a current review
+ */
+router.post(
+  '/threat-model/gate-check',
+  requireJwtAuth,
+  requireRoles('admin'),
+  strictRateLimiter,
+  asyncHandler(runGateCheck),
+// ── Orphaned transaction reconciliation (issue #858) ──────────────────────
+
+/**
+ * GET /api/v1/admin/transactions/reconciliation
+ * Lists all orphaned-tx reconciliation records with optional state filter.
+ */
+router.get(
+  '/transactions/reconciliation',
+  requireApiKey('admin:reconciliation'),
+  listTransactionReconciliations,
+);
+
+/**
+ * POST /api/v1/admin/transactions/reconciliation/:id/resolve
+ * Manually resolves a reconciliation record. Requires a resolution note.
+ */
+router.post(
+  '/transactions/reconciliation/:id/resolve',
+  requireApiKey('admin:reconciliation'),
+  strictRateLimiter,
+  resolveOrphanedTransaction,
+);
