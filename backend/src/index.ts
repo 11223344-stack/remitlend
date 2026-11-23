@@ -35,6 +35,10 @@ import {
 } from './services/crossContractReconciler.js';
 import { sorobanService } from './services/sorobanService.js';
 import { validateLoanConfigOnStartup } from './config/loanConfig.js';
+import {
+  startCapacitySnapshotScheduler,
+  stopCapacitySnapshotScheduler,
+} from './services/capacityModel.js';
 import { startLoanDueCheckCron, stopLoanDueCheckCron } from './cron/loanCheckCron.js';
 import {
   startContractVerificationCron,
@@ -125,6 +129,9 @@ const server = app.listen(port, () => {
 
   // Wire up and activate the score decay daily scheduler loop
   scoreDecaySchedulerHandle = startScoreDecayScheduler() || null;
+
+  // Start capacity snapshot scheduler (#865)
+  startCapacitySnapshotScheduler();
 });
 
 let shuttingDown = false;
@@ -175,6 +182,7 @@ const shutdown = async (signal: 'SIGTERM' | 'SIGINT') => {
     stopOrphanedTxReconciler();
     stopScoreReconciliationScheduler();
     stopCrossContractReconciler();
+    stopCapacitySnapshotScheduler();
     stopNotificationCleanupScheduler();
     logger.info('All schedulers stopped.');
 
