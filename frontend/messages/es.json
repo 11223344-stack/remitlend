@@ -204,7 +204,8 @@
     "details": "Detalles"
   },
   "AdminLayout": {
-    "adminArea": "Área de administración"
+    "adminArea": "Área de administración",
+    "translationsReview": "Traducciones financieras"
   },
   "AdminDisputes": {
     "eyebrow": "Consola admin",
@@ -377,6 +378,36 @@
     "unknown": "Desconocido",
     "executableNow": "Ejecutable ahora"
   },
+  "TranslationReview": {
+    "eyebrow": "Control de localización",
+    "title": "Revisión de traducciones financieras",
+    "description": "Revise términos monetarios y de préstamos según el glosario antes del lanzamiento. Las aprobaciones están vinculadas a la revisión de origen mostrada.",
+    "forbidden": "Necesitas el rol de administrador para revisar cadenas financieras.",
+    "releaseReady": "Puerta de lanzamiento: lista",
+    "releaseBlocked": "Puerta de lanzamiento: bloqueada",
+    "reviewed": "{approved} de {checked} revisiones vigentes",
+    "issues": "Incidencias bloqueantes",
+    "noIssues": "No hay incidencias bloqueantes.",
+    "source": "Origen",
+    "translation": "Traducción",
+    "context": "Contexto",
+    "glossary": "Glosario",
+    "status": "Estado",
+    "approve": "Aprobar",
+    "reject": "Solicitar cambios",
+    "approved": "Aprobado",
+    "rejected": "Cambios solicitados",
+    "pending": "Pendiente",
+    "reviewer": "Revisor",
+    "reviewedAt": "Revisado",
+    "none": "-",
+    "stale": "El origen cambió desde la revisión",
+    "update": "Aprobar origen actual",
+    "updated": "Revisión registrada.",
+    "error": "No se pudo registrar la revisión.",
+    "locale": "Idioma",
+    "key": "Clave",
+    "actions": "Acciones"
   "Errors": {
     "referenceLabel": "ID de referencia",
     "actions": {
