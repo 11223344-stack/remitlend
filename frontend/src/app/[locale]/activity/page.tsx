@@ -13,6 +13,7 @@ import { rowsToCsv } from "../../utils/csv";
 import { downloadSignedCsv } from "../../utils/statementExport";
 import { StatementVerificationNotice } from "../../components/security/StatementVerificationNotice";
 import { useWindowedList } from "../../hooks/useWindowedList";
+import { TransactionHistory } from "../../components/activity/TransactionHistory";
 
 type FilterType = "all" | "loan" | "remittance";
 
@@ -438,6 +439,10 @@ export default function ActivityPage() {
           </div>
         </ErrorBoundary>
       )}
+
+      <ErrorBoundary scope="on-chain transactions" variant="section">
+        <TransactionHistory />
+      </ErrorBoundary>
     </main>
   );
 }
