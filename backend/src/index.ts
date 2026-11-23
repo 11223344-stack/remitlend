@@ -53,6 +53,9 @@ import {
   stopSorobanWriteReplayProcessor,
 } from './services/sorobanWriteReplayProcessor.js';
 import {
+  startQueueBackpressureRefresh,
+  stopQueueBackpressureRefresh,
+} from './services/queueBackpressure.js';
   startOrphanedTxReconciler,
   stopOrphanedTxReconciler,
 } from './services/orphanedTxReconciler.js';
@@ -106,6 +109,8 @@ const server = app.listen(port, () => {
   // Drain Soroban writes queued while the RPC was unavailable (#74)
   startSorobanWriteReplayProcessor();
 
+  // Start queue backpressure saturation refresh loop (#860)
+  startQueueBackpressureRefresh();
   // Reconcile orphaned transaction submissions (lost-response intents) (#858)
   startOrphanedTxReconciler();
 
@@ -179,6 +184,7 @@ const shutdown = async (signal: 'SIGTERM' | 'SIGINT') => {
     stopDefaultCheckerScheduler();
     stopWebhookRetryProcessor();
     stopSorobanWriteReplayProcessor();
+    stopQueueBackpressureRefresh();
     stopOrphanedTxReconciler();
     stopScoreReconciliationScheduler();
     stopCrossContractReconciler();
