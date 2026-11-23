@@ -12,6 +12,8 @@ import {
   getConsentMetaHandler,
 } from '../controllers/consentController.js';
 import { grantConsentSchema, revokeConsentSchema } from '../schemas/consentSchemas.js';
+import { asyncHandler } from '../utils/asyncHandler.js';
+import { requestSelfErasure } from '../controllers/erasureController.js';
 
 const router = Router();
 
@@ -188,6 +190,17 @@ router.post(
  *   post:
  *     summary: Revoke consent for a data processing purpose
  *     tags: [Consent]
+/**
+ * @swagger
+ * /user/erasure-request:
+ *   post:
+ *     summary: Request erasure of your own personal data (right to erasure)
+ *     description: >
+ *       Submits a right-to-erasure request for the authenticated user's PII.
+ *       The request is queued as 'pending' and must be executed by an admin.
+ *       Rejected if the user has an active financial obligation (outstanding loan).
+ *       Idempotent: a second request is rejected while one is already pending or in-progress.
+ *     tags: [User]
  *     security:
  *       - BearerAuth: []
  *     requestBody:
@@ -222,6 +235,27 @@ router.post(
   strictRateLimiter,
   validateBody(revokeConsentSchema),
   revokeConsentHandler,
+ *             required: [reason]
+ *             properties:
+ *               reason:
+ *                 type: string
+ *                 enum: [right_to_erasure, account_closure, gdpr_article_17, ccpa_deletion, other]
+ *               consent_ref:
+ *                 type: string
+ *                 nullable: true
+ *     responses:
+ *       202:
+ *         description: Erasure request queued
+ *       400:
+ *         description: Validation error
+ *       409:
+ *         description: Duplicate request or active financial obligation
+ */
+router.post(
+  '/erasure-request',
+  requireJwtAuth,
+  strictRateLimiter,
+  asyncHandler(requestSelfErasure),
 );
 
 export default router;
