@@ -36,6 +36,10 @@ import {
 import { sorobanService } from './services/sorobanService.js';
 import { validateLoanConfigOnStartup } from './config/loanConfig.js';
 import { assertNetworkReadiness } from './config/networkReadiness.js';
+import {
+  startCapacitySnapshotScheduler,
+  stopCapacitySnapshotScheduler,
+} from './services/capacityModel.js';
 import { startLoanDueCheckCron, stopLoanDueCheckCron } from './cron/loanCheckCron.js';
 import {
   startContractVerificationCron,
@@ -49,6 +53,13 @@ import {
   startSorobanWriteReplayProcessor,
   stopSorobanWriteReplayProcessor,
 } from './services/sorobanWriteReplayProcessor.js';
+import {
+  startQueueBackpressureRefresh,
+  stopQueueBackpressureRefresh,
+} from './services/queueBackpressure.js';
+  startOrphanedTxReconciler,
+  stopOrphanedTxReconciler,
+} from './services/orphanedTxReconciler.js';
 
 const port = process.env.PORT || 3001;
 
@@ -104,6 +115,11 @@ const server = app.listen(port, () => {
   // Drain Soroban writes queued while the RPC was unavailable (#74)
   startSorobanWriteReplayProcessor();
 
+  // Start queue backpressure saturation refresh loop (#860)
+  startQueueBackpressureRefresh();
+  // Reconcile orphaned transaction submissions (lost-response intents) (#858)
+  startOrphanedTxReconciler();
+
   // Start webhook retry processor (5m/15m/45m backoff via WebhookService.processRetries)
   startWebhookRetryProcessor();
 
@@ -124,6 +140,9 @@ const server = app.listen(port, () => {
 
   // Wire up and activate the score decay daily scheduler loop
   scoreDecaySchedulerHandle = startScoreDecayScheduler() || null;
+
+  // Start capacity snapshot scheduler (#865)
+  startCapacitySnapshotScheduler();
 });
 
 let shuttingDown = false;
@@ -171,8 +190,11 @@ const shutdown = async (signal: 'SIGTERM' | 'SIGINT') => {
     stopDefaultCheckerScheduler();
     stopWebhookRetryProcessor();
     stopSorobanWriteReplayProcessor();
+    stopQueueBackpressureRefresh();
+    stopOrphanedTxReconciler();
     stopScoreReconciliationScheduler();
     stopCrossContractReconciler();
+    stopCapacitySnapshotScheduler();
     stopNotificationCleanupScheduler();
     logger.info('All schedulers stopped.');
 

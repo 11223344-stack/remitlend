@@ -22,6 +22,7 @@ import notificationsRoutes from './routes/notificationsRoutes.js';
 import eventRoutes from './routes/eventRoutes.js';
 import remittanceRoutes from './routes/remittanceRoutes.js';
 import transactionRoutes from './routes/transactionRoutes.js';
+import orphanedTxRoutes from './routes/orphanedTxRoutes.js';
 import { registerStatusRoutes } from './routes/statusRoutes.js';
 import internalRoutes from './routes/internalRoutes.js';
 import { requireApiKey } from './middleware/auth.js';
@@ -39,6 +40,7 @@ import { shutdownCoordinator } from './middleware/shutdownHandler.js';
 import { reportCSPViolation } from './controllers/cspReportController.js';
 import { pauseGuard } from './middleware/pauseGuard.js';
 import { deprecationHeadersMiddleware } from './middleware/deprecationHeaders.js';
+import { cacheInvalidationHeaderMiddleware } from './middleware/cacheInvalidationHeader.js';
 import { asyncHandler } from './utils/asyncHandler.js';
 import { AppError } from './errors/AppError.js';
 import logger from './utils/logger.js';
@@ -51,6 +53,7 @@ import {
   shutdownConnectionLeakDetection,
   dbConnectionLeakDetector,
 } from './middleware/dbConnectionLeakDetector.js';
+import { buildCapacitySnapshot } from './services/capacityModel.js';
 const app = express();
 
 setupConnectionLeakDetection();
@@ -191,6 +194,11 @@ app.use(idempotencyMiddleware);
 // Issue #1381: Cross-layer emergency pause coordination
 app.use(pauseGuard);
 
+// Cache invalidation header propagation (#853): ensure Cache-Invalidation-Token
+// headers set by deletion endpoints survive compression and carry no-store
+// directives so proxies do not cache projection-invalidating responses.
+app.use(cacheInvalidationHeaderMiddleware);
+
 app.post(
   '/api/v1/csp-report',
   asyncHandler(async (req: Request, res: Response) => reportCSPViolation(req, res)),
@@ -325,6 +333,50 @@ app.get(
 app.get('/metrics', requireApiKey('admin:indexer'), asyncHandler(metricsHandler));
 
 /**
+ * GET /capacity
+ *
+ * On-demand capacity model snapshot — issue #865.
+ *
+ * Returns a point-in-time forecast of database storage, connection demand,
+ * and Redis memory, plus retention headroom and scale threshold crossings.
+ * Requires admin:indexer API key (same gate as /metrics).
+ *
+ * Query parameters:
+ *   forecastDays  (integer, default 30) — projection horizon.
+ *
+ * Response body:
+ * {
+ *   capturedAt: ISO string,
+ *   forecastDays: number,
+ *   overallThresholdLevel: "ok" | "warn" | "critical",
+ *   tables: [ { table, rowCount, estimatedBytes, projectedBytes,
+ *                retentionDays, eligibleForPurge, thresholdLevel } ],
+ *   totalDbEstimatedBytes: number,
+ *   totalDbProjectedBytes: number,
+ *   connectionDemand: { peakConnections, projectedPeakConnections,
+ *                        connectionUtilizationRatio, thresholdLevel },
+ *   redisMemoryModel: { totalBytesEstimate, projectedBytesEstimate },
+ *   thresholds: { tableStorageWarnBytes, tableStorageCriticalBytes, ... }
+ * }
+ *
+ * No secret values, no user-identifying data, and no financial amounts are
+ * included in any field of this response.
+ */
+app.get(
+  '/capacity',
+  requireApiKey('admin:indexer'),
+  asyncHandler(async (req: Request, res: Response) => {
+    const rawDays = req.query['forecastDays'];
+    const forecastDays = typeof rawDays === 'string' && /^\d+$/.test(rawDays)
+      ? Math.min(Math.max(Number.parseInt(rawDays, 10), 1), 365)
+      : 30;
+
+    const snapshot = await buildCapacitySnapshot(forecastDays);
+    res.json(snapshot);
+  }),
+);
+
+/**
  * GET /health/deep
  * Exercises DB, Redis, Stellar RPC, and indexer lag.
  * Returns 200 when all green, 503 when any dependency is down,
@@ -438,6 +490,9 @@ app.use('/api/events', eventRoutes);
 app.use('/api/remittances', remittanceRoutes);
 app.use('/api/transactions', transactionRoutes);
 
+// Orphaned transaction reconciliation routes (issue #858)
+app.use('/api/transactions', orphanedTxRoutes);
+
 // Versioned API routes (v1 - current)
 app.use('/api/v1', simulationRoutes);
 app.use('/api/v1/score', scoreRoutes);
@@ -447,6 +502,9 @@ app.use('/api/v1/admin', adminRoutes);
 app.use('/api/v1/auth', authRoutes);
 app.use('/api/v1/remittances', remittanceRoutes);
 app.use('/api/v1/transactions', transactionRoutes);
+
+// Orphaned transaction reconciliation routes (issue #858)
+app.use('/api/v1/transactions', orphanedTxRoutes);
 app.use('/api/v1/pool', poolRoutes);
 app.use('/api/v1/notifications', notificationsRoutes);
 app.use('/api/v1/events', eventRoutes);
