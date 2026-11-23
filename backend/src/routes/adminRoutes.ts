@@ -56,6 +56,12 @@ import {
 } from '../services/privilegedActionService.js';
 import { AppError } from '../errors/AppError.js';
 import {
+  adminInitiateErasure,
+  listErasureRequests,
+  getErasureRequest,
+  executeErasure,
+  getErasureCertificate,
+} from '../controllers/erasureController.js';
   initiateReview,
   approveReview,
   listReviews,
@@ -948,6 +954,15 @@ router.get(
 
 export default router;
 
+
+// ── Cryptographic erasure (#847) ─────────────────────────────────────────────
+
+/**
+ * @swagger
+ * /admin/erasure:
+ *   post:
+ *     summary: Admin-initiated erasure request on behalf of a user
+ *     tags: [Admin, Erasure]
 // ── Threat-model refresh gate (#856) ─────────────────────────────────────────
 
 /**
@@ -968,6 +983,14 @@ export default router;
  *         application/json:
  *           schema:
  *             type: object
+ *             required: [user_public_key, reason]
+ *             properties:
+ *               user_public_key:
+ *                 type: string
+ *               reason:
+ *                 type: string
+ *                 enum: [right_to_erasure, account_closure, gdpr_article_17, ccpa_deletion, other]
+ *               consent_ref:
  *             required: [boundary, document_hash]
  *             properties:
  *               boundary:
@@ -986,6 +1009,12 @@ export default router;
  *                 nullable: true
  *     responses:
  *       202:
+ *         description: Request queued
+ *       409:
+ *         description: Duplicate or active financial obligation
+ */
+router.post(
+  '/erasure',
  *         description: Review draft created
  *       409:
  *         description: Duplicate draft for this boundary + reviewer
@@ -996,11 +1025,77 @@ router.post(
   requireRoles('admin'),
   strictRateLimiter,
   auditLog,
+  asyncHandler(adminInitiateErasure),
   asyncHandler(initiateReview),
 );
 
 /**
  * @swagger
+ * /admin/erasure:
+ *   get:
+ *     summary: List erasure requests
+ *     tags: [Admin, Erasure]
+ *     parameters:
+ *       - in: query
+ *         name: status
+ *         schema: { type: string, enum: [pending, in_progress, completed, failed, rejected] }
+ *       - in: query
+ *         name: limit
+ *         schema: { type: integer, default: 50 }
+ *       - in: query
+ *         name: cursor
+ *         schema: { type: string }
+ *     responses:
+ *       200:
+ *         description: Paginated list
+ */
+router.get('/erasure', requireJwtAuth, requireRoles('admin'), asyncHandler(listErasureRequests));
+
+/**
+ * @swagger
+ * /admin/erasure/{id}:
+ *   get:
+ *     summary: Get a single erasure request
+ *     tags: [Admin, Erasure]
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema: { type: string, format: uuid }
+ *     responses:
+ *       200:
+ *         description: Erasure request
+ *       404:
+ *         description: Not found
+ */
+router.get(
+  '/erasure/:id',
+  requireJwtAuth,
+  requireRoles('admin'),
+  asyncHandler(getErasureRequest),
+);
+
+/**
+ * @swagger
+ * /admin/erasure/{id}/execute:
+ *   post:
+ *     summary: Execute a pending erasure — null PII, zero DEKs, revoke KEK, issue certificate
+ *     description: >
+ *       Idempotent guard: completed/in-progress requests are rejected.
+ *       Returns the verifiable erasure certificate on success.
+ *     tags: [Admin, Erasure]
+ *     security:
+ *       - BearerAuth: []
+ *     responses:
+ *       201:
+ *         description: Erasure executed; certificate issued
+ *       409:
+ *         description: Request already completed or in-progress
+ *       404:
+ *         description: Request not found
+ */
+router.post(
+  '/erasure/:id/execute',
  * /admin/threat-model/reviews/{id}/approve:
  *   post:
  *     summary: Approve a draft threat-model review (second-admin gate)
@@ -1077,6 +1172,32 @@ router.post(
   requireRoles('admin'),
   strictRateLimiter,
   auditLog,
+  asyncHandler(executeErasure),
+);
+
+/**
+ * @swagger
+ * /admin/erasure/{id}/certificate:
+ *   get:
+ *     summary: Fetch and verify the erasure certificate
+ *     description: >
+ *       Re-computes the SHA-256 hash over the stored JSON fields and returns
+ *       hash_verified: true when the certificate has not been tampered with.
+ *     tags: [Admin, Erasure]
+ *     responses:
+ *       200:
+ *         description: Certificate with hash_verified flag
+ *       404:
+ *         description: No certificate for this request
+ */
+router.get(
+  '/erasure/:id/certificate',
+  requireJwtAuth,
+  requireRoles('admin'),
+  asyncHandler(getErasureCertificate),
+);
+
+export default router;
   asyncHandler(recordChange),
 );
 
