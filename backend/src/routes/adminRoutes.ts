@@ -43,6 +43,7 @@ import {
 } from '../controllers/loanStateEventController.js';
 
 import { listDiscrepancies } from '../services/discrepancyLedgerService.js';
+import breakGlassRoutes from './breakGlassRoutes.js';
 import {
   listTransactionReconciliations,
   resolveOrphanedTransaction,
@@ -962,6 +963,9 @@ router.get(
 
 export default router;
 
+// ── Break-glass emergency access (issue #849) ────────────────────────────
+// Mounts all break-glass routes under /admin/break-glass (and v1 equivalent).
+router.use('/', breakGlassRoutes);
 
 // ── Cryptographic erasure (#847) ─────────────────────────────────────────────
 

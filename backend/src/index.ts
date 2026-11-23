@@ -54,6 +54,9 @@ import {
   stopSorobanWriteReplayProcessor,
 } from './services/sorobanWriteReplayProcessor.js';
 import {
+  startBreakGlassExpirySweep,
+  stopBreakGlassExpirySweep,
+} from './services/breakGlassService.js';
   startQueueBackpressureRefresh,
   stopQueueBackpressureRefresh,
 } from './services/queueBackpressure.js';
@@ -141,6 +144,8 @@ const server = app.listen(port, () => {
   // Wire up and activate the score decay daily scheduler loop
   scoreDecaySchedulerHandle = startScoreDecayScheduler() || null;
 
+  // Auto-revoke break-glass grants past their expiry (#849)
+  startBreakGlassExpirySweep();
   // Start capacity snapshot scheduler (#865)
   startCapacitySnapshotScheduler();
 });
@@ -190,6 +195,7 @@ const shutdown = async (signal: 'SIGTERM' | 'SIGINT') => {
     stopDefaultCheckerScheduler();
     stopWebhookRetryProcessor();
     stopSorobanWriteReplayProcessor();
+    stopBreakGlassExpirySweep();
     stopQueueBackpressureRefresh();
     stopOrphanedTxReconciler();
     stopScoreReconciliationScheduler();
