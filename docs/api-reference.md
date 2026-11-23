@@ -949,6 +949,58 @@ x-api-key: <ADMIN_API_KEY>
 
 ---
 
+#### GET /api/v1/admin/abuse-telemetry
+
+Returns privacy-safe abuse telemetry for financial mutations (admin JWT role
+required). No wallet address, key, signed transaction, IP, amount, or actor
+reference is returned. See [ABUSE_TELEMETRY.md](./ABUSE_TELEMETRY.md).
+
+**Request:**
+
+```
+Authorization: Bearer <ADMIN_JWT>
+GET /api/v1/admin/abuse-telemetry?riskTier=high&outcome=blocked&limit=50
+```
+
+Optional query parameters: `mutationType`, `outcome`, `riskTier`, `limit`
+(1–100, default 50). Invalid values return 400.
+
+**Response (200 OK):**
+
+```json
+{
+  "success": true,
+  "data": {
+    "retentionDays": 30,
+    "summary": {
+      "total": 12,
+      "blocked": 1,
+      "byOutcome": { "success": 10, "failure": 1, "blocked": 1 },
+      "byRiskTier": { "low": 10, "medium": 1, "high": 1 }
+    },
+    "events": [
+      {
+        "mutationType": "loan_repay",
+        "decision": "block",
+        "outcome": "blocked",
+        "riskTier": "high",
+        "rateBand": "burst",
+        "attemptsInWindow": 21,
+        "occurredAt": "2026-06-15T12:34:56.000Z"
+      }
+    ]
+  }
+}
+```
+
+**Notes:**
+- The deprecated `/api/admin/abuse-telemetry` alias is mounted for parity with
+  other admin endpoints and carries deprecation headers.
+- A blocked financial mutation returns 429 `RATE_LIMIT_EXCEEDED` and creates no
+  financial state; see the linked design document for the full state table.
+
+---
+
 #### POST /api/v1/admin/loans/{loanId}/approve
 
 Approve a loan (admin only).
