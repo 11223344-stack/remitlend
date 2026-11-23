@@ -571,6 +571,12 @@ export const dbPoolRejectedCounter = new client.Counter({
   registers: [metricsRegistry],
 });
 
+
+export const dbConnectionsActiveGauge = new client.Gauge({
+  name: 'db_connections_active',
+  help: 'Number of active PostgreSQL connections currently checked out of the pool',
+  registers: [metricsRegistry],
+});
 // ---------------------------------------------------------------------------
 // Capacity model metrics (issue #865)
 // ---------------------------------------------------------------------------
