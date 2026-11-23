@@ -167,6 +167,77 @@ pub struct ProposalSweptEvent {
     pub proposed_at: u64,
     pub expired_at: u64,
     pub swept_at: u64,
+/// Per-operation pause flags. Mirrors the lending pool's `PauseFlags` so the
+/// governance payload can be consumed directly by the pool and loan manager.
+#[contracttype]
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct PauseFlags {
+    pub deposits: bool,
+    pub withdrawals: bool,
+    pub yield_claims: bool,
+    pub loan_approvals: bool,
+    pub repayments: bool,
+}
+
+impl PauseFlags {
+    pub fn none() -> Self {
+        Self {
+            deposits: false,
+            withdrawals: false,
+            yield_claims: false,
+            loan_approvals: false,
+            repayments: false,
+        }
+    }
+
+    pub fn all() -> Self {
+        Self {
+            deposits: true,
+            withdrawals: true,
+            yield_claims: true,
+            loan_approvals: true,
+            repayments: true,
+        }
+    }
+}
+
+/// Structured payload emitted by governance and consumed by the pool and loan
+/// manager to set their respective `PauseFlags`.
+#[contracttype]
+#[derive(Clone, Debug)]
+pub struct EmergencyPausePayload {
+    /// Address that activated the pause.
+    pub actor: Address,
+    /// Per-operation flags to apply.
+    pub flags: PauseFlags,
+    /// Ledger timestamp at activation.
+    pub timestamp: u64,
+    /// Optional human-readable reason.
+    pub reason: Option<soroban_sdk::String>,
+    /// If Some(n), the pause auto-expires after n ledgers.
+    pub max_duration_ledgers: Option<u32>,
+    /// Ledger sequence at which the pause auto-expires (0 = no expiry).
+    pub expires_at_ledger: u32,
+}
+
+/// Emitted when an emergency pause is activated.
+#[contracttype]
+#[derive(Clone, Debug)]
+pub struct EmergencyPauseActivatedEvent {
+    pub actor: Address,
+    pub flags: PauseFlags,
+    pub timestamp: u64,
+    pub reason: Option<soroban_sdk::String>,
+    pub max_duration_ledgers: Option<u32>,
+    pub expires_at_ledger: u32,
+}
+
+/// Emitted when an emergency pause is lifted.
+#[contracttype]
+#[derive(Clone, Debug)]
+pub struct EmergencyPauseLiftedEvent {
+    pub actor: Address,
+    pub timestamp: u64,
 }
 
 // ─── Contract ─────────────────────────────────────────────────────────────────
@@ -217,6 +288,97 @@ impl GovernanceContract {
         Ok(())
     }
 
+    // ── Emergency pause ───────────────────────────────────────────────────────
+
+    /// Activate an emergency pause with per-operation granularity.
+    ///
+    /// Only the admin may call this. The structured payload is emitted as an
+    /// event so the pool and loan manager can consume it and set their own
+    /// `PauseFlags`. If `max_duration_ledgers` is Some(n), the pause
+    /// auto-expires after n ledgers.
+    pub fn emergency_pause(
+        env: Env,
+        flags: PauseFlags,
+        reason: Option<soroban_sdk::String>,
+        max_duration_ledgers: Option<u32>,
+    ) -> Result<(), GovernanceError> {
+        let admin = Self::read_admin(&env)?;
+        admin.require_auth();
+
+        let now = env.ledger().timestamp();
+        let current_ledger = env.ledger().sequence();
+        let expires_at_ledger = match max_duration_ledgers {
+            Some(d) => current_ledger.saturating_add(d),
+            None => 0,
+        };
+
+        let payload = EmergencyPausePayload {
+            actor: admin.clone(),
+            flags: flags.clone(),
+            timestamp: now,
+            reason: reason.clone(),
+            max_duration_ledgers,
+            expires_at_ledger,
+        };
+
+        env.storage()
+            .instance()
+            .set(&symbol_short!("PAUSE"), &payload);
+
+        env.events().publish(
+            (Symbol::new(&env, "EmergencyPauseActivated"),),
+            EmergencyPauseActivatedEvent {
+                actor: admin,
+                flags,
+                timestamp: now,
+                reason,
+                max_duration_ledgers,
+                expires_at_ledger,
+            },
+        );
+        Ok(())
+    }
+
+    /// Lift an active emergency pause.
+    pub fn emergency_unpause(env: Env) -> Result<(), GovernanceError> {
+        let admin = Self::read_admin(&env)?;
+        admin.require_auth();
+
+        env.storage()
+            .instance()
+            .remove(&symbol_short!("PAUSE"));
+
+        env.events().publish(
+            (Symbol::new(&env, "EmergencyPauseLifted"),),
+            EmergencyPauseLiftedEvent {
+                actor: admin,
+                timestamp: env.ledger().timestamp(),
+            },
+        );
+        Ok(())
+    }
+
+    /// Return the currently active pause payload, accounting for time-bounded
+    /// auto-expiry. Returns `None` if no pause is active or it has expired.
+    pub fn get_active_pause(env: Env) -> Option<EmergencyPausePayload> {
+        let payload: Option<EmergencyPausePayload> = env
+            .storage()
+            .instance()
+            .get(&symbol_short!("PAUSE"));
+        match payload {
+            Some(p) => {
+                if p.expires_at_ledger != 0
+                    && env.ledger().sequence() >= p.expires_at_ledger
+                {
+                    None
+                } else {
+                    Some(p)
+                }
+            }
+            None => None,
+        }
+    }
+
     // ── Propose ───────────────────────────────────────────────────────────────
 
     /// Propose a transfer of the admin role.
@@ -265,21 +427,19 @@ impl GovernanceContract {
         // Ensure signer list contains unique addresses. Duplicates would allow
         // the same key to be listed multiple times and potentially bypass
         // the multi-signer threshold semantics. We build an explicit
-        // deduplicated `unique_signers` Vec that preserves order but rejects
-        // input lists containing duplicates.
+        // deduplicated `unique_signers` Vec that preserves order but
+        // rejects duplicates.
         let mut unique_signers: Vec<Address> = Vec::new(&env);
-        for s in signers.iter() {
-            if unique_signers.iter().any(|x| x == s) {
-                // Explicitly reject proposals containing duplicate signer
-                // entries to avoid any ambiguity in quorum semantics.
+        for signer in signers.iter() {
+            if unique_signers.contains(&signer) {
                 return Err(GovernanceError::DuplicateSigner);
             }
-            unique_signers.push_back(s.clone());
+            unique_signers.push_back(signer);
         }
-        if threshold < 1 {
+        if threshold == 0 {
             return Err(GovernanceError::ThresholdTooLow);
         }
-        if threshold > signers.len() {
+        if threshold > unique_signers.len() {
             return Err(GovernanceError::ThresholdExceedsSignerCount);
         }
         if delay_seconds < MIN_TIMELOCK_SECONDS {
@@ -287,39 +447,33 @@ impl GovernanceContract {
         }
 
         let now = env.ledger().timestamp();
-        let executable_after = now.saturating_add(delay_seconds);
-
-        let proposal_count: u32 = env
+        let proposal_id: u32 = env
             .storage()
             .instance()
             .get(&KEY_PROPOSAL_COUNT)
-            .unwrap_or(0);
-        let proposal_id = proposal_count + 1;
-        env.storage()
-            .instance()
-            .set(&KEY_PROPOSAL_COUNT, &proposal_id);
+            .unwrap_or(0)
+            .saturating_add(1);
+        env.storage().instance().set(&KEY_PROPOSAL_COUNT, &proposal_id);
 
         let pending = PendingTransfer {
             id: proposal_id,
             proposed_admin: proposed_admin.clone(),
-            // Store the deduplicated signer list.
             signers: unique_signers.clone(),
             threshold,
-            executable_after,
+            executable_after: now.saturating_add(delay_seconds),
             approvals: Map::new(&env),
             proposed_at: now,
             status: ProposalStatus::Active,
         };
-
         env.storage().instance().set(&KEY_PENDING, &pending);
 
         env.events().publish(
-            (symbol_short!("GovProp"), admin.clone()),
+            (Symbol::new(&env, "AdminTransferProposed"),),
             AdminTransferProposedEvent {
                 proposed_admin,
-                signers,
+                signers: unique_signers,
                 threshold,
-                executable_after,
+                executable_after: pending.executable_after,
                 proposed_by: admin,
                 timestamp: now,
             },
@@ -820,6 +974,7 @@ impl GovernanceContract {
     }
 
     // ── Private helpers ───────────────────────────────────────────────────────
+    // ── Helpers ───────────────────────────────────────────────────────────────
 
     fn read_admin(env: &Env) -> Result<Address, GovernanceError> {
         env.storage()
