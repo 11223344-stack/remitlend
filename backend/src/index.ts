@@ -35,6 +35,7 @@ import {
 } from './services/crossContractReconciler.js';
 import { sorobanService } from './services/sorobanService.js';
 import { validateLoanConfigOnStartup } from './config/loanConfig.js';
+import { startApiKeyExpiryCron, stopApiKeyExpiryCron } from './controllers/keyRotationController.js';
 import { assertNetworkReadiness } from './config/networkReadiness.js';
 import {
   startCapacitySnapshotScheduler,
@@ -143,6 +144,7 @@ const server = app.listen(port, () => {
 
   // Start loan due check cron
   startLoanDueCheckCron();
+  startApiKeyExpiryCron();
 
   // Start contract verification polling against Stellar explorer
   startContractVerificationCron();
@@ -196,6 +198,7 @@ const shutdown = async (signal: 'SIGTERM' | 'SIGINT') => {
     }
 
     stopLoanDueCheckCron();
+    stopApiKeyExpiryCron();
     stopContractVerificationCron();
     await stopIndexer();
     stopDefaultCheckerScheduler();
