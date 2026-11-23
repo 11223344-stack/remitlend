@@ -1012,6 +1012,184 @@ Content-Type: application/json
 
 ---
 
+#### GET /api/v1/admin/network-telemetry
+
+Returns per-network submission throughput, latency, throttling, error rates,
+bounded-failover state, durable write-queue depth, and retry-storm alert state.
+Requires the `admin:indexer` API key. See
+[NETWORK_TELEMETRY.md](./NETWORK_TELEMETRY.md) for state and metric definitions.
+
+**Headers:**
+```
+x-api-key: <ADMIN_API_KEY>
+```
+
+**Response (200 OK):**
+```json
+{
+  "success": true,
+  "data": {
+    "telemetry": {
+      "windowMs": 60000,
+      "generatedAt": 1730000000000,
+      "networks": [
+        {
+          "networkId": "testnet",
+          "throughputPerSec": 0.5,
+          "attemptCount": 30,
+          "errorRate": 0.1,
+          "throttleRate": 0,
+          "latencyP50Ms": 420,
+          "latencyP95Ms": 1800,
+          "latencyP99Ms": 2400,
+          "inFlight": 1
+        }
+      ],
+      "writeQueue": { "pending": 2, "deadLettered": 0 },
+      "stormAlertActive": false
+    },
+    "failover": {
+      "activeEndpointId": "testnet",
+      "maxFailoverHops": 3,
+      "endpoints": [
+        {
+          "id": "testnet",
+          "label": "testnet",
+          "rpcUrl": "https://soroban-testnet.stellar.org",
+          "priority": 0,
+          "enabled": true,
+          "active": true,
+          "circuitState": "closed",
+          "consecutiveFailures": 0,
+          "lastError": null,
+          "lastSuccessAt": 1730000000000,
+          "lastFailureAt": null
+        }
+      ]
+    }
+  }
+}
+```
+
+**Notes:**
+- `rpcUrl` is an operational identifier, not a secret. Signed XDR payloads are
+  never returned by telemetry endpoints.
+
+---
+
+#### GET /api/v1/admin/network-failover/events
+
+Lists recent failover, exhaustion, and retry-storm alert events, newest first.
+Requires the `admin:indexer` API key.
+
+**Headers:**
+```
+x-api-key: <ADMIN_API_KEY>
+```
+
+**Query Parameters:**
+```
+?limit=50
+```
+
+`limit` is clamped to `1..200`; the default is `50`.
+
+**Response (200 OK):**
+```json
+{
+  "success": true,
+  "data": {
+    "events": [
+      {
+        "id": 1,
+        "networkId": "failover-eu",
+        "fromNetworkId": "testnet",
+        "eventType": "failover_activated",
+        "details": { "reason": "primary unhealthy" },
+        "createdAt": "2024-11-01T12:00:00.000Z"
+      }
+    ]
+  }
+}
+```
+
+---
+
+#### GET /api/v1/admin/network-failover/dead-letters
+
+Lists signed writes that exhausted their bounded retry ceiling. Returns metadata
+only; no signed XDR is exposed. Requires the `admin:indexer` API key.
+
+**Headers:**
+```
+x-api-key: <ADMIN_API_KEY>
+```
+
+**Query Parameters:**
+```
+?limit=50
+```
+
+**Response (200 OK):**
+```json
+{
+  "success": true,
+  "data": {
+    "deadLetters": [
+      {
+        "id": 42,
+        "operation": "submit_signed_tx",
+        "attempts": 10,
+        "maxAttempts": 10,
+        "lastError": "RPC unavailable",
+        "deadLetteredAt": "2024-11-01T12:05:00.000Z",
+        "deadLetterReason": "exhausted 10 bounded attempts: RPC unavailable"
+      }
+    ]
+  }
+}
+```
+
+---
+
+#### POST /api/v1/admin/network-failover/dead-letters/{id}/redrive
+
+Re-queues a dead-lettered signed write for another bounded retry pass. The
+signed XDR and transaction hash are unchanged. Requires the `admin:indexer` API
+key.
+
+**Headers:**
+```
+x-api-key: <ADMIN_API_KEY>
+```
+
+**Path Parameters:**
+```
+id=42
+```
+
+**Response (200 OK):**
+```json
+{
+  "success": true,
+  "data": { "id": 42, "status": "pending" }
+}
+```
+
+**Response (404 NOT FOUND):**
+```json
+{
+  "success": false,
+  "error": { "code": "NOT_FOUND", "message": "Dead-lettered write not found" }
+}
+```
+
+**Notes:**
+- Re-drive is rejected with `400` when `id` is not a positive integer.
+- A write that is no longer dead-lettered is rejected without mutation.
+
+---
+
 ### Remittances Endpoints
 
 #### GET /api/v1/remittances
