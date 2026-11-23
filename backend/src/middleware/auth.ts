@@ -14,6 +14,7 @@ export type ApiKeyScope =
   | 'admin:loans'
   | 'admin:reconciliation'
   | 'admin:recovery';
+  | 'admin:break-glass';
 
 interface ParsedKey {
   scope: ApiKeyScope | null; // null = legacy (all scopes)
