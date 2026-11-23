@@ -377,6 +377,97 @@
     "unknown": "Desconocido",
     "executableNow": "Ejecutable ahora"
   },
+  "Errors": {
+    "referenceLabel": "ID de referencia",
+    "actions": {
+      "retry": "Reintentar",
+      "reauthenticate": "Iniciar sesión de nuevo",
+      "contact_support": "Contactar con soporte",
+      "refresh": "Actualizar",
+      "none": "Cerrar"
+    },
+    "guidance": {
+      "invalidAmount": {
+        "title": "Revisa el importe",
+        "message": "Introduce un importe mayor que cero.",
+        "guidance": "Usa la moneda mostrada en esta pantalla. Los importes nunca se convierten automáticamente."
+      },
+      "invalidCredentials": {
+        "title": "Revisa tus datos de acceso",
+        "message": "No pudimos verificar la firma de tu billetera o el identificador de la cuenta.",
+        "guidance": "Vuelve a conectar tu billetera, aprueba la nueva solicitud e inténtalo de nuevo. Las direcciones nunca se traducen."
+      },
+      "invalidInput": {
+        "title": "Revisa los datos",
+        "message": "Uno o más valores no pudieron aceptarse.",
+        "guidance": "Revisa los campos marcados y conserva los identificadores tal como se proporcionaron."
+      },
+      "sessionExpired": {
+        "title": "Sesión pendiente",
+        "message": "Tu sesión segura ya no está activa.",
+        "guidance": "Inicia sesión de nuevo para continuar. No repitas un pago hasta ver su estado final."
+      },
+      "accessDenied": {
+        "title": "Acceso restringido",
+        "message": "No tienes permiso para esta acción.",
+        "guidance": "Cambia a una cuenta con el acceso necesario o contacta con soporte con la referencia siguiente."
+      },
+      "notFound": {
+        "title": "No disponible",
+        "message": "No encontramos el elemento solicitado.",
+        "guidance": "Actualiza la lista y comprueba el identificador antes de intentarlo de nuevo."
+      },
+      "conflict": {
+        "title": "El estado cambió",
+        "message": "Algo cambió mientras se procesaba tu solicitud.",
+        "guidance": "Actualiza para ver el estado más reciente y reintenta solo si la acción sigue siendo necesaria."
+      },
+      "duplicateRequest": {
+        "title": "Ya enviado",
+        "message": "Esta solicitud ya fue aceptada.",
+        "guidance": "Consulta el estado actual en lugar de enviarla de nuevo; repetirla no cambiará el resultado."
+      },
+      "rateLimited": {
+        "title": "Reduce la frecuencia",
+        "message": "Se enviaron demasiadas solicitudes en poco tiempo.",
+        "guidance": "Espera el tiempo sugerido y vuelve a intentarlo una vez."
+      },
+      "unavailable": {
+        "title": "No disponible temporalmente",
+        "message": "Un servicio necesario no responde.",
+        "guidance": "Espera un momento y reintenta. No se ha movido dinero salvo que veas una transacción confirmada."
+      },
+      "invalidLoan": {
+        "title": "Revisa el préstamo",
+        "message": "El identificador o la referencia del préstamo no es válido.",
+        "guidance": "Copia el identificador exactamente como aparece en los detalles del préstamo e inténtalo de nuevo."
+      },
+      "loanState": {
+        "title": "Estado del préstamo cambiado",
+        "message": "Esta acción no está disponible para el estado actual del préstamo.",
+        "guidance": "Actualiza los detalles. Los préstamos ya reembolsados no necesitan otro pago."
+      },
+      "insufficientFunds": {
+        "title": "Saldo insuficiente",
+        "message": "La cuenta no tiene saldo disponible suficiente.",
+        "guidance": "Añade fondos o reduce el importe. El activo y las unidades exactas se muestran en el formulario."
+      },
+      "blockchain": {
+        "title": "Problema de red",
+        "message": "La red no confirmó la operación.",
+        "guidance": "Comprueba el estado de la transacción antes de reintentar. No envíes dos veces la misma transacción firmada."
+      },
+      "internal": {
+        "title": "Algo salió mal",
+        "message": "No pudimos completar la solicitud.",
+        "guidance": "Vuelve a intentarlo en breve. Si persiste, contacta con soporte con la referencia siguiente."
+      },
+      "fallback": {
+        "title": "Error inesperado",
+        "message": "Se produjo un error inesperado.",
+        "guidance": "Reintenta una vez y, si persiste, contacta con soporte con la referencia siguiente."
+      }
+    }
   "Offers": {
     "title": "Comparar ofertas de préstamos y pool",
     "description": "Ordena columnas con el teclado o compara las tarjetas en pantallas pequeñas. Los importes conservan su moneda de origen.",

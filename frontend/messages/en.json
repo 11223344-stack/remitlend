@@ -377,6 +377,97 @@
     "unknown": "Unknown",
     "executableNow": "Executable now"
   },
+  "Errors": {
+    "referenceLabel": "Reference ID",
+    "actions": {
+      "retry": "Try again",
+      "reauthenticate": "Sign in again",
+      "contact_support": "Contact support",
+      "refresh": "Refresh",
+      "none": "Dismiss"
+    },
+    "guidance": {
+      "invalidAmount": {
+        "title": "Check the amount",
+        "message": "Enter an amount greater than zero.",
+        "guidance": "Use the currency shown on this screen. Amounts are never converted automatically."
+      },
+      "invalidCredentials": {
+        "title": "Check your sign-in details",
+        "message": "We could not verify your wallet signature or account identifier.",
+        "guidance": "Reconnect your wallet, approve the new request, and try again. Wallet addresses are never translated."
+      },
+      "invalidInput": {
+        "title": "Review the details",
+        "message": "One or more values could not be accepted.",
+        "guidance": "Check the highlighted fields and keep identifiers exactly as provided."
+      },
+      "sessionExpired": {
+        "title": "Session needs attention",
+        "message": "Your secure session is no longer active.",
+        "guidance": "Sign in again to continue. Do not repeat a payment until you see its final status."
+      },
+      "accessDenied": {
+        "title": "Access restricted",
+        "message": "You do not have permission for this action.",
+        "guidance": "Switch to an account with the required access or contact support with the reference below."
+      },
+      "notFound": {
+        "title": "Not available",
+        "message": "We could not find the requested item.",
+        "guidance": "Refresh the list and check the identifier before trying again."
+      },
+      "conflict": {
+        "title": "State changed",
+        "message": "Something changed while your request was being processed.",
+        "guidance": "Refresh to see the latest state, then retry only if the action is still needed."
+      },
+      "duplicateRequest": {
+        "title": "Already submitted",
+        "message": "This request was already accepted.",
+        "guidance": "Check the current status instead of submitting it again; repeating it will not change the result."
+      },
+      "rateLimited": {
+        "title": "Please slow down",
+        "message": "Too many requests were sent in a short time.",
+        "guidance": "Wait for the suggested delay, then try again once."
+      },
+      "unavailable": {
+        "title": "Temporarily unavailable",
+        "message": "A required service is not responding.",
+        "guidance": "Wait a moment and retry. No money has moved unless you see a confirmed transaction."
+      },
+      "invalidLoan": {
+        "title": "Check the loan",
+        "message": "The loan identifier or reference is not valid.",
+        "guidance": "Copy the identifier exactly as shown in your loan details and try again."
+      },
+      "loanState": {
+        "title": "Loan state changed",
+        "message": "This action is not available for the current loan state.",
+        "guidance": "Refresh the loan details. Already-repaid loans never need another payment."
+      },
+      "insufficientFunds": {
+        "title": "Balance too low",
+        "message": "The account does not have enough available balance.",
+        "guidance": "Add funds or reduce the amount. The exact asset and units are shown in the form."
+      },
+      "blockchain": {
+        "title": "Network issue",
+        "message": "The network did not confirm the operation.",
+        "guidance": "Check the transaction status before retrying. Do not submit the same signed transaction twice."
+      },
+      "internal": {
+        "title": "Something went wrong",
+        "message": "We could not complete the request.",
+        "guidance": "Try again shortly. If it keeps happening, contact support with the reference below."
+      },
+      "fallback": {
+        "title": "Unexpected error",
+        "message": "An unexpected error occurred.",
+        "guidance": "Retry once, then contact support with the reference below if it persists."
+      }
+    }
   "Offers": {
     "title": "Compare loan and pool offers",
     "description": "Sort columns with the keyboard or compare the card layout on small screens. Amounts keep their source currency.",
