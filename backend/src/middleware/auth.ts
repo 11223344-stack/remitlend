@@ -13,6 +13,7 @@ export type ApiKeyScope =
   | 'admin:webhooks'
   | 'admin:loans'
   | 'admin:reconciliation'
+  | 'admin:recovery';
   | 'admin:break-glass';
 
 interface ParsedKey {
