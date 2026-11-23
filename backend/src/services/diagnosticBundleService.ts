@@ -2,6 +2,9 @@ import { Pool } from 'pg';
 import { deepRedact } from '../utils/logger.js';
 import { maskValue } from './piiCrypto.js';
 import { auditLogService } from './auditLogService.js';
+import { deepRedact } from '../utils/logger';
+import { maskValue } from '../utils/masking.js';
+import { auditLogService } from './auditLogService';
 
 /**
  * Diagnostic bundle service.
