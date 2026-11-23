@@ -22,6 +22,7 @@ import notificationsRoutes from './routes/notificationsRoutes.js';
 import eventRoutes from './routes/eventRoutes.js';
 import remittanceRoutes from './routes/remittanceRoutes.js';
 import transactionRoutes from './routes/transactionRoutes.js';
+import orphanedTxRoutes from './routes/orphanedTxRoutes.js';
 import { registerStatusRoutes } from './routes/statusRoutes.js';
 import internalRoutes from './routes/internalRoutes.js';
 import { requireApiKey } from './middleware/auth.js';
@@ -39,6 +40,7 @@ import { shutdownCoordinator } from './middleware/shutdownHandler.js';
 import { reportCSPViolation } from './controllers/cspReportController.js';
 import { pauseGuard } from './middleware/pauseGuard.js';
 import { deprecationHeadersMiddleware } from './middleware/deprecationHeaders.js';
+import { cacheInvalidationHeaderMiddleware } from './middleware/cacheInvalidationHeader.js';
 import { asyncHandler } from './utils/asyncHandler.js';
 import { AppError } from './errors/AppError.js';
 import logger from './utils/logger.js';
@@ -186,6 +188,11 @@ app.use(idempotencyMiddleware);
 // Pause guard: reject state-mutating requests when contracts are paused
 // Issue #1381: Cross-layer emergency pause coordination
 app.use(pauseGuard);
+
+// Cache invalidation header propagation (#853): ensure Cache-Invalidation-Token
+// headers set by deletion endpoints survive compression and carry no-store
+// directives so proxies do not cache projection-invalidating responses.
+app.use(cacheInvalidationHeaderMiddleware);
 
 app.post(
   '/api/v1/csp-report',
@@ -388,6 +395,9 @@ app.use('/api/events', eventRoutes);
 app.use('/api/remittances', remittanceRoutes);
 app.use('/api/transactions', transactionRoutes);
 
+// Orphaned transaction reconciliation routes (issue #858)
+app.use('/api/transactions', orphanedTxRoutes);
+
 // Versioned API routes (v1 - current)
 app.use('/api/v1', simulationRoutes);
 app.use('/api/v1/score', scoreRoutes);
@@ -397,6 +407,9 @@ app.use('/api/v1/admin', adminRoutes);
 app.use('/api/v1/auth', authRoutes);
 app.use('/api/v1/remittances', remittanceRoutes);
 app.use('/api/v1/transactions', transactionRoutes);
+
+// Orphaned transaction reconciliation routes (issue #858)
+app.use('/api/v1/transactions', orphanedTxRoutes);
 app.use('/api/v1/pool', poolRoutes);
 app.use('/api/v1/notifications', notificationsRoutes);
 app.use('/api/v1/events', eventRoutes);
