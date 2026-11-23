@@ -33,6 +33,7 @@ import { createSupportedAsset } from '../services/assetAllowlistService.js';
 
 import { buildRejectLoanTx } from '../controllers/loanController.js';
 import { listAuditLogs } from '../controllers/authController.js';
+import { exportAuditLogs, verifyAuditLogs } from '../controllers/auditLogExportController.js';
 import {
   deleteUserProjectionCache,
   bulkDeleteUserProjectionCache,
@@ -161,6 +162,48 @@ router.post(
 
 router.get('/audit-logs', requireJwtAuth, requireRoles('admin'), listAuditLogs);
 
+/**
+ * @swagger
+ * /admin/audit-logs/export:
+ *   get:
+ *     summary: Stream audit log entries as NDJSON with their HMAC chain fields
+ *     tags: [Admin]
+ *     security:
+ *       - BearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: from
+ *         schema: { type: string, format: date-time }
+ *       - in: query
+ *         name: to
+ *         schema: { type: string, format: date-time }
+ *     responses:
+ *       200:
+ *         description: NDJSON stream (application/x-ndjson), one entry per line
+ */
+router.get('/audit-logs/export', requireJwtAuth, requireRoles('admin'), exportAuditLogs);
+
+/**
+ * @swagger
+ * /admin/audit-logs/verify:
+ *   post:
+ *     summary: Verify the tamper-evident HMAC chain over a time range
+ *     tags: [Admin]
+ *     security:
+ *       - BearerAuth: []
+ *     requestBody:
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               from: { type: string, format: date-time }
+ *               to: { type: string, format: date-time }
+ *     responses:
+ *       200:
+ *         description: pass/fail with the first broken link, if any
+ */
+router.post('/audit-logs/verify', requireJwtAuth, requireRoles('admin'), auditLog, verifyAuditLogs);
 router.get(
   '/abuse-telemetry',
   requireJwtAuth,
