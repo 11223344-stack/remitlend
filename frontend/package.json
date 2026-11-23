@@ -22,6 +22,7 @@
     "test:watch": "jest --watch",
     "test:e2e": "playwright test",
     "test:a11y": "playwright test e2e/a11y.spec.ts --project=chromium",
+    "test:offer-tables": "jest --runInBand OfferComparisonTable offerComparison",
     "storybook": "storybook dev -p 6006",
     "build-storybook": "storybook build",
     "prepare": "husky",

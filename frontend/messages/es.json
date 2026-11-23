@@ -468,5 +468,57 @@
         "guidance": "Reintenta una vez y, si persiste, contacta con soporte con la referencia siguiente."
       }
     }
+  "Offers": {
+    "title": "Comparar ofertas de préstamos y pool",
+    "description": "Ordena columnas con el teclado o compara las tarjetas en pantallas pequeñas. Los importes conservan su moneda de origen.",
+    "caption": "Comparación de ofertas de préstamos y pool. Los encabezados de columna ordenan la tabla; cada nombre de fila es un encabezado de fila.",
+    "summary": "Se muestran {visible} de {total} ofertas. Ordenadas por {column} {direction}. Filtros: {filters}.",
+    "sortAction": "Activar para ordenar por esta columna",
+    "sortAscending": "ascendente",
+    "sortDescending": "descendente",
+    "loanName": "Préstamo {id}",
+    "poolName": "Pool de préstamos",
+    "rate": "{value}%",
+    "termNone": "Flexible",
+    "filters": {
+      "searchLabel": "Buscar ofertas",
+      "searchPlaceholder": "Buscar por nombre o ID",
+      "currencyLabel": "Moneda",
+      "kindLabel": "Tipo de oferta",
+      "statusLabel": "Estado",
+      "all": "Todas",
+      "loan": "Préstamo",
+      "pool": "Pool"
+    },
+    "columns": {
+      "name": "Oferta",
+      "kind": "Tipo",
+      "amount": "Importe disponible",
+      "ratePercent": "Tasa / APY",
+      "termDays": "Plazo (días)",
+      "status": "Estado"
+    },
+    "states": {
+      "loading": "Cargando ofertas…",
+      "error": "No se pudieron cargar las ofertas. Reintentar desde el portal de prestamistas.",
+      "empty": "Ninguna oferta coincide con los filtros actuales.",
+      "invalid": "Esa acción de ordenación o filtro no era válida y se ignoró."
+    }
+  "Privacy": {
+    "title": "Privacidad",
+    "description": "Controla cómo se muestran los datos confidenciales de la cuenta en este dispositivo.",
+    "reducedDataMode": "Modo de Datos Reducido",
+    "reducedDataModeDesc": "Oculta identificadores de cuenta y saldos en pantallas sensibles. Los valores ocultos no aparecen en texto copiado, capturas de pantalla ni nombres accesibles.",
+    "whenEnabled": "Cuando está habilitado",
+    "addressesMasked": "Las direcciones de wallet se muestran como una máscara en lugar de la dirección real",
+    "balancesMasked": "Saldos y montos se muestran como una máscara en lugar del valor real",
+    "scoresMasked": "Las puntuaciones de crédito se muestran como una máscara en lugar del número real",
+    "copyDisabled": "Los botones de copiar en valores ocultos están deshabilitados",
+    "revealHint": "Usa el interruptor de ojo en cualquier valor oculto para revelarlo temporalmente",
+    "localOnly": "Esta preferencia se almacena localmente solo en este dispositivo. No afecta los datos de su cuenta en la blockchain o backend.",
+    "reveal": "Revelar",
+    "hide": "Ocultar",
+    "hidden": "oculto",
+    "copyDisabledHint": "Copia deshabilitada (oculto)"
   }
 }
